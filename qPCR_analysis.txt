@@ -14,14 +14,10 @@ git push -u origin main
 ## remind myself, we are looking for the presence of cyanobacteria and nitrogen
 ## fixing genes in the vicinity of rhizomes of 
 
-## each run has a lot of files associated with it. 
 
 ## we need the quantification threshold value of these
 ## think we can get this from this file, for example 
-
-summFile="/home/daniel/Documents/projects/cliffMosses/qPCR/NifH/csv/'qPCR_2026-04-30_NifH -  Quantification Summary.csv"
-
-## but we need to check efficiency, how to do this?
+## and we need to check efficiency, how to do this?
 
 ## looking for a nice package to do this...
 
@@ -35,6 +31,31 @@ source  qpcr/bin/activate
 
 pip3 install qpcr  
 
+pip3 install scikit-learn
+
+## but careful, this stored the venv in my github repo, didn't mean to do that. 
+## each run has a lot of files associated with it. 
+
+## good first step would be to see if we can plot our 
+## amplification curves:
+
+ampFile = ("/home/daniel/Documents/projects/mossSymbiosis/cliffMosses/"
+           "mossCyano_qPCR/general16S/csv/"
+           "qPCR_2026-04-21_general16S_mosses -  Quantification Amplification Results_SYBR.csv")
+
+aa = pd.read_csv(ampFile, index_col="Cycle")
+aa.drop(aa.columns[0], axis=1, inplace=True)
+
+bb = aa.plot.line()
+bb.get_legend().remove()
+## works, sort of. Where is our ct threshold?
+## can't find it stated in any of the exported CSVs...
+## it's somewhere around 200 rfus, I think:
+plt.hlines(y=200, xmin=1, xmax=41, colors='r', linestyles='--')
+
+## great. Now, how do we check efficiencies?
+
+
 ## try it out:
 
 cd /home/daniel/Documents/projects/cliffMosses/qPCR
@@ -43,7 +64,12 @@ python3
 
 import qpcr, os
 import matplotlib.pyplot as plt; plt.ion()
+import pandas as pd
 from urllib.request import urlretrieve 
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+pd.set_option('display.max_rows', None)
 
 ## run through their example at https://github.com/NoahHenrikKleinschmidt/qpcr/blob/main/Examples/0_getting_started.ipynb
 ## need some sample data:
@@ -60,12 +86,31 @@ path, headers = urlretrieve (url, filename)
 
 assay_files = [ "./HNRNPL_prot.csv", "./HNRNPL_nmd.csv" ]
 normaliser_files = [ "./28S.csv", "./actin.csv" ]
+
 assays = qpcr.read(assay_files)
+
+## the efficiencies were somehow calculated 
+## automatically:
+
+assays[0] 
+
+## Assay(id='HNRNPL_prot', eff=1.0, n=24)
+
+## how was this calculated? Is there a dilution series built in somewhere?
+## or a stated efficiency?
+## it's not in the csv... must be included by the reader?
+
+help(qpcr.read)
+
+qpcr - Getting Started
+
 normalisers = qpcr.read(normaliser_files)
 
 assays = qpcr.delta_ct(assays)
 normalisers = qpcr.delta_ct(normalisers)
 results = qpcr.normalise(assays, normalisers)
+
+help(qpcr.normalise)
 
 results
 fig = results.preview()
@@ -75,6 +120,152 @@ plt.show()
 fig = qpcr.plot(results)
 
 ## seems simple enough. Can we adapt to our data?
-## our normaliser gene would be 16S
 
+## each run has a lot of files associated with it. 
 
+## good first step would be to see if we can plot our 
+## amplification curves:
+
+ampFile = ("/home/daniel/Documents/projects/mossSymbiosis/cliffMosses/"
+           "mossCyano_qPCR/general16S/csv/"
+           "qPCR_2026-04-21_general16S_mosses -  Quantification Amplification Results_SYBR.csv")
+
+aa = pd.read_csv(ampFile, index_col="Cycle")
+aa.drop(aa.columns[0], axis=1, inplace=True)
+
+bb = aa.plot.line()
+bb.get_legend().remove()
+## works, sort of. Where is our ct threshold?
+## can't find it stated in any of the exported CSVs...
+## it's somewhere around 200 rfus, I think:
+plt.hlines(y=200, xmin=1, xmax=41, colors='r', linestyles='--')
+
+## great. Now, how do we check efficiencies?
+
+## we have CSVs from each of our trials, 
+## these include our dilution series. 
+
+## maybe we need to reformat our data a bit. 
+## the qpcr package offers a lot of readers for different
+## file formats, but for me it is probably simpler
+## to do some rearranging with pandas.
+
+## looking at their sample data, we need just a simple two column
+## dataframe, with sample names and ct values
+
+## not sure how to incorporate corrections from our 
+## standard (dilution) curves into this?
+## I know the dilution curves are main data for calculating
+## pcr efficiency. If the PCR efficiencies are 
+## comparable, then I think we don't need them 
+## further, and the data from the different genes and 
+## and treatments can be compared directly. 
+## if not, I guess we need some correction, using the
+## dilution curves as models. 
+## apparently the latter would be called:
+## "efficiency-corrected Pfaffl method"
+
+## can we check PCR efficiencies with this package?
+
+## I can't see a way. Code it ourselves.
+## following qiagen on this:
+https://www.qiagen.com/us/knowledge-and-support/knowledge-hub/bench-guide/pcr/pcr-quantification/determining-amplification-efficiencies
+
+## one dilution series 
+E = 10^(–1/S) – 1 ## where S = slope of the standard curve
+
+## to get the slope of our standard curves...for instance with general 16s:
+##  
+
+general16Sdf = pd.read_csv("/home/daniel/Documents/projects/mossSymbiosis/"
+                 "cliffMosses/mossCyano_qPCR/general16S/csv/"
+                 "qPCR_2026-04-21_general16S_mosses -  Quantification Summary.csv",
+                 index_col="Well", usecols=["Well","Sample","Cq","SQ"]
+)
+dilutionDF = general16Sdf.query("Sample == 'Ana'")
+x = dilutionDF.SQ.to_numpy().reshape((-1, 1))
+y = dilutionDF.Cq.to_numpy()
+model = LinearRegression().fit(x, y)
+general16S_r2 = model.score(x, y)
+print(f"intercept: {model.intercept_}")
+print(f"slope: {model.coef_}") ## -10.8658
+general16S_slope = round(model.coef_[0], 2)
+general16S_interc = round(model.intercept_, 2)
+fig, ax = plt.subplots()
+ax.plot(x, y, "o")
+ax.plot( x, model.predict(x), 
+        c='k', linewidth=4, linestyle= "dotted")
+ax.set_title("general 16S standard dilution curve")
+ax.set_ylabel('cycles till detection (ct)')
+ax.set_xlabel('dilution')
+plt.text(0.5,20,f"{general16S_slope}x + {general16S_interc}")
+plt.text(0.5,18,f"r2={round(general16S_r2,3)}")
+
+##### get cyano16sdf slope
+cyano16Sdf = pd.read_csv("/home/daniel/Documents/projects/mossSymbiosis/"
+                 "cliffMosses/mossCyano_qPCR/cyano16S/csv/"
+                 "qPCR_2026-04-21_cyano16S_mosses -  Quantification Summary.csv",
+                 index_col="Well", usecols=["Well","Sample","Cq","SQ"]
+)
+dilutionDF = cyano16Sdf.query("Sample == 'Ana'")
+x = dilutionDF.SQ.to_numpy().reshape((-1, 1))
+y = dilutionDF.Cq.to_numpy()
+model = LinearRegression().fit(x, y)
+cyano16S_r2 = model.score(x, y)
+print(f"intercept: {model.intercept_}")
+print(f"slope: {model.coef_}") ## -10.8658
+cyano16S_slope = round(model.coef_[0], 2)
+cyano16S_interc = round(model.intercept_, 2)
+fig, ax = plt.subplots()
+ax.plot(x, y, "o")
+ax.plot( x, model.predict(x), 
+        c='k', linewidth=4, linestyle= "dotted")
+ax.set_title("cyano 16S standard dilution curve")
+ax.set_ylabel('cycles till detection (ct)')
+ax.set_xlabel('dilution')
+plt.text(0.5,20,f"{cyano16S_slope}x + {cyano16S_interc}")
+plt.text(0.5,18,f"r2={round(cyano16S_r2,3)}")
+
+## and nifH:
+nifHdf = pd.read_csv("/home/daniel/Documents/projects/mossSymbiosis/"
+                 "cliffMosses/mossCyano_qPCR/NifH/csv/"
+                 "qPCR_2026-04-30_NifH -  Quantification Summary.csv",
+                 index_col="Well", usecols=["Well","Sample","Cq","SQ"]
+)
+dilutionDF = nifHdf.query("Sample == 'Ana'")
+x = dilutionDF.SQ.to_numpy().reshape((-1, 1))
+y = dilutionDF.Cq.to_numpy()
+model = LinearRegression().fit(x, y)
+nifH_r2 = model.score(x, y)
+print(f"intercept: {model.intercept_}")
+print(f"slope: {model.coef_}")
+nifH_slope = round(model.coef_[0], 2)
+nifH_interc = round(model.intercept_, 2)
+fig, ax = plt.subplots()
+ax.plot(x, y, "o")
+ax.plot( x, model.predict(x), 
+        c='k', linewidth=4, linestyle= "dotted")
+ax.set_title("nifH standard dilution curve")
+ax.set_ylabel('cycles till detection (ct)')
+ax.set_xlabel('dilution')
+plt.text(0.5,20,f"{nifH_slope}x + {nifH_interc}")
+plt.text(0.5,18,f"r2={round(nifH_r2,3)}")
+
+plt.close('all')
+
+## to estimate efficiency, use these slopes 
+E = 10^(–1/S) – 1 ## where S = slope of the standard curve
+
+## so for general 16s:
+S = general16S_slope
+E = 10**(-1/S) - 1 ## wow, really low, 0.236
+
+## cyano 16s:
+S = cyano16S_slope
+E = 10**(-1/S) - 1 ## even lower, 0.164
+
+S = nifH_slope
+E = 10**(-1/S) - 1 ## 0.281
+
+## all really low, but not that different. 
+## it looks like 
