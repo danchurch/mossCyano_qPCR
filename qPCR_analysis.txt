@@ -42,28 +42,39 @@ cd /home/daniel/Documents/projects/cliffMosses/qPCR
 python3
 
 import qpcr, os
-
-## run through their examples:
-
+import matplotlib.pyplot as plt; plt.ion()
 from urllib.request import urlretrieve 
 
+## run through their example at https://github.com/NoahHenrikKleinschmidt/qpcr/blob/main/Examples/0_getting_started.ipynb
+## need some sample data:
 
 #filename = "HNRNPL_prot.csv"
 #filename = "HNRNPL_nmd.csv"
 #filename = "28S.csv"
-#filename = "actin.csv"
+filename = "actin.csv"
 url = ("https://raw.githubusercontent.com/"
         "NoahHenrikKleinschmidt/qpcr/refs/"
         "heads/main/Examples/Example%20Data/"
         + filename)
-
 path, headers = urlretrieve (url, filename)
 
+assay_files = [ "./HNRNPL_prot.csv", "./HNRNPL_nmd.csv" ]
+normaliser_files = [ "./28S.csv", "./actin.csv" ]
+assays = qpcr.read(assay_files)
+normalisers = qpcr.read(normaliser_files)
 
-assay_files = [ "./Example Data/HNRNPL_prot.csv", "./Example Data/HNRNPL_nmd.csv" ]
-normaliser_files = [ "./Example Data/28S.csv", "./Example Data/actin.csv" ]
+assays = qpcr.delta_ct(assays)
+normalisers = qpcr.delta_ct(normalisers)
+results = qpcr.normalise(assays, normalisers)
 
+results
+fig = results.preview()
 
+plt.show()
 
+fig = qpcr.plot(results)
+
+## seems simple enough. Can we adapt to our data?
+## our normaliser gene would be 16S
 
 
