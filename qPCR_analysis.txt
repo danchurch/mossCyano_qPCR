@@ -1,0 +1,59 @@
+## let's go ahead and start on Lisa's qPCR results, see what information can be 
+## had there.
+
+## remind myself, we are looking for the presence of cyanobacteria and nitrogen
+## fixing genes in the vicinity of rhizomes of 
+
+## each run has a lot of files associated with it. 
+
+## we need the quantification threshold value of these
+## think we can get this from this file, for example 
+
+summFile="/home/daniel/Documents/projects/cliffMosses/qPCR/NifH/csv/'qPCR_2026-04-30_NifH -  Quantification Summary.csv"
+
+## but we need to check efficiency, how to do this?
+
+## looking for a nice package to do this...
+
+## for something in python
+
+sudo apt install python3-venv
+
+python3 -m venv qpcr
+
+source  qpcr/bin/activate
+
+pip3 install qpcr  
+
+## try it out:
+
+cd /home/daniel/Documents/projects/cliffMosses/qPCR
+
+python3
+
+import qpcr, os
+
+## run through their examples:
+
+from urllib.request import urlretrieve 
+
+
+#filename = "HNRNPL_prot.csv"
+#filename = "HNRNPL_nmd.csv"
+#filename = "28S.csv"
+#filename = "actin.csv"
+url = ("https://raw.githubusercontent.com/"
+        "NoahHenrikKleinschmidt/qpcr/refs/"
+        "heads/main/Examples/Example%20Data/"
+        + filename)
+
+path, headers = urlretrieve (url, filename)
+
+
+assay_files = [ "./Example Data/HNRNPL_prot.csv", "./Example Data/HNRNPL_nmd.csv" ]
+normaliser_files = [ "./Example Data/28S.csv", "./Example Data/actin.csv" ]
+
+
+
+
+

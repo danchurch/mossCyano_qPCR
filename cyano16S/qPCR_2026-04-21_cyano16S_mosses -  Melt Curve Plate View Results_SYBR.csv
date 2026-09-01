@@ -1,0 +1,33 @@
+,,1,2,3,4,5,6,7,8,9,10,11,12
+A,Content,Std,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn
+A,Sample,Ana,S_HC,S_DS,S_PF,L_NC,L_AV,L_TA,G_HC,G_DS,G_PF,L_TA,NTC
+A,Peak 1,85,85.5,85.5,None,85.5,85.5,85.5,85.5,85.5,None,85.5,72
+A,Peak 2,None,None,None,None,None,None,None,None,None,None,None,None
+B,Content,Std,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn
+B,Sample,Ana,S_HC,S_DS,S_PF,L_NC,L_AV,L_TA,G_HC,G_DS,G_PF,L_TA,NTC
+B,Peak 1,85,85,85.5,85.5,85.5,85.5,85.5,85.5,85.5,None,71,72
+B,Peak 2,None,None,None,None,None,None,None,None,None,None,None,None
+C,Content,Std,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn
+C,Sample,Ana,S_HC,S_DS,S_PF,L_NC,L_AV,L_TA,G_HC,G_DS,G_PF,,
+C,Peak 1,85,None,85.5,None,85.5,71,85,85.5,85.5,85.5,None,None
+C,Peak 2,None,None,None,None,None,None,None,None,None,None,None,None
+D,Content,Std,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn
+D,Sample,Ana,S_HC,S_DS,S_PF,L_NC,L_AV,L_TA,G_HC,G_DS,G_PF,,
+D,Peak 1,85,None,None,85.5,85.5,85.5,85.5,85,85.5,85.5,None,None
+D,Peak 2,None,None,None,None,None,None,None,None,None,None,None,None
+E,Content,Std,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn
+E,Sample,Ana,S_HC,S_DS,S_PF,L_NC,L_AV,L_TA,G_HC,G_DS,G_PF,,
+E,Peak 1,None,None,85.5,None,85,85.5,85.5,85,85.5,85.5,None,None
+E,Peak 2,None,None,None,None,None,None,None,None,None,None,None,None
+F,Content,Std,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn
+F,Sample,Ana,S_HC,S_DS,S_PF,L_NC,L_AV,L_TA,G_HC,G_DS,G_PF,,
+F,Peak 1,85,85.5,85.5,None,85.5,85.5,85,85,85.5,None,None,None
+F,Peak 2,None,None,None,None,None,None,None,None,None,None,None,None
+G,Content,Std,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn
+G,Sample,Ana,S_HC,S_DS,S_PF,L_NC,L_AV,L_TA,G_HC,G_DS,G_PF,,
+G,Peak 1,85,85.5,85.5,None,85.5,85.5,85.5,85,85.5,None,None,None
+G,Peak 2,None,None,None,None,None,None,None,None,None,None,None,None
+H,Content,Std,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn,Unkn
+H,Sample,Ana,S_HC,S_DS,S_PF,L_NC,L_AV,L_TA,G_HC,G_DS,G_PF,,
+H,Peak 1,85.5,85.5,85.5,None,85.5,85.5,85.5,85.5,85.5,85.5,None,None
+H,Peak 2,None,None,None,None,None,None,None,None,None,None,None,None

@@ -1,0 +1,55 @@
+- comparing the 16S primers we have from romina to the Warshan 2016 project:
+            
+CYA106F     CGGACGGGTGAGTAACGCGTGA    Their general cyano 16F primer, from Nübel et al., 1997
+CYA359F     GGGGAATYTTCCGCAATGGG      Our forward primer
+16S cyano-F CGGACGGGTGAGTAACGCGTGA    Nübel et al., 1997 (Warshan) = CYA106F
+16S cyano-R GACTACTGGGGTATCTAATCCCATT Nübel et al., 1997 (Warshan) = CYA781R(a)
+            GACTACTGGGGTATCTAATCCCATT Our Reverse A
+            GACTACTGGGGTATCTAATCCCATT Our incorrect "Reverse B" (same as A)
+CYA781R(a)  GACTACTGGGGTATCTAATCCCATT Nübel et al., 1997
+CYA781R(b)  GACTACAGGGGTATCTAATCCCTTT Nübel et al., 1997
+
+
+- so warshan used for cyanbacterial 16S Nübel CYA106F and Nübel CYA781R(a)
+- but we have CYA359F and CYA781R(a), seems fine to use these. 
+
+- but Nuebel et al. specifically state that no test has been done for these primers against plastids. Did Warshan test them?
+
+- they sequenced their PCR products, which were from bulk moss DNA and say that the products aligned as expected in the ininbergs phylogeny. 
+- seems unlikely (but possible) that ininbergs accidentally included chloroplast nifH analogs. 
+- But they don't mention their 16S results.(can't be aligned to a nifH tree!). So this doesn't solve the 16s dilemma.
+ 
+- nifH primers:
+
+nifH cyano-R GCATACATCGCCATCATTTCACC   Olson et al., 1998 (Warshan)
+CNR          GCATACATCGCCATCATTTCACC   Our reverse (Olson et al., 1998)
+CNF          CGTAGGTTGCGACCCTAAGGCTGA  Our forward (Olson et al., 1998)
+
+- what was their general cyanobacterial forward nif primer? can't find it.
+- again, we think these PCRs amplify plant analogues...how to do deal with this? Warshan et al. say they didn't have any problems with this,
+- but we can't unsee what we observed in our trials. Oh well. 
+
+- I don't think they did a general nifH test, just the various clade-specific ones
+
+- in general, it seems like we have the primer sets we need to repeat the aspects of Warshan et al. (2016) that we want to.
+  = cyanobacterial nifH abundance and cyanobacterial 16s abundance, both relative to general 16S abundance
+
+- so plan for the qPCR test...we would like to include the following:
+    1. tests for PCR effeciency, = 0.01 to 1.00 dilution curve for all three primer sets
+      = 8 dilutions * 3 primers = 24 reactions 
+    2. triplicate reps x 3 genes for all samples in the study
+      = 76 samples * 3 primer pairs * 3 reps = 684 reactions. Too many. 
+      - so instead, just hope there is enough replication built into the study as is to handle 
+        the error from this. 
+      = 76 samples * 3 genes, on three plates
+    3. some non-template control plates 
+    4. a sample of e. coli DNA as a neg/pos control on each plate
+    5. a sample of anabaena on each plate as positive control. 
+    
+ Our primers have different annealing temperatures. So, different plates are needed, I think.
+ 
+ Let's do 20 uL reactions, and hope we have enough mastermix for this. 
+
+ 
+ 
+
