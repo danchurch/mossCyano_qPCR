@@ -315,6 +315,7 @@ nifH_exp = (
                                     .reset_index()
                   )
 
+############ !!!!!!!!! change this vvv, imaginary data injection !!!!!!!!! ##############
 ## following our imaginary data scheme, anything 
 ## rows A-D would be "near", and rows E-H would be "far"
 
@@ -332,8 +333,29 @@ cyano16s_exp['moss'] = cyano16s_exp.Sample.str.split("_",expand=True)[1]
 nifH_exp['rock'] = nifH_exp.Sample.str.split("_",expand=True)[0]
 nifH_exp['moss'] = nifH_exp.Sample.str.split("_",expand=True)[1]
 
+## NTC samples. Fix this, no rocks and moss or controls:
+nifH_exp.set_index("Well", inplace=True)
+nifH_exp.loc[["A12","B12"],["rock","moss"]] = "None"
+general16s_exp.set_index("Well", inplace=True)
+general16s_exp.loc[["A12","B12"],["rock","moss"]] = "None"
+cyano16s_exp.set_index("Well", inplace=True)
+cyano16s_exp.loc[["A12","B12"],["rock","moss"]] = "None"
+
+## the NTC samples should also have nothing for location. 
+## maybe this is where we can state they are controls:
+
+nifH_exp.set_index("Well", inplace=True)
+
+nifH_exp.loc[["A12","B12"],"location"] = "control"
+
+general16s_exp.loc[["A12","B12"],"location"] #= "control"
+
+cyano16s_exp.moss == nifH_exp.moss
+
 general16s_exp.head()
+
 cyano16s_exp.head()
+
 nifH_exp.head()
 
 ## okay, how would we analyze this?
@@ -354,7 +376,6 @@ https://github.com/mirzaghaderi/rtpcr
 
 ## maybe we should switch over to R...
 
-
 ## following the above website, first let's 
 ## see if their amplification efficiencies
 ## match our initial calculations
@@ -364,20 +385,114 @@ https://github.com/mirzaghaderi/rtpcr
 ## for efficiencies, they need a df with a column of 
 ## dilution rates, and a column for each gene:
 
-general16Sdf
-cyano16Sdf
-nifHdf
-
+dilutions
 general16Sdf.query("Sample == 'Ana'")
 
 cyano16Sdf.query("Sample == 'Ana'")
 
 nifHdf.query("Sample == 'Ana'")
 
+general16Sdf
 cyano16Sdf
 nifHdf
 
+general16Sdf.head()
+
+general16Sdf.query("Sample == 'Ana'")
+
+dilutions =          general16Sdf.query("Sample == 'Ana'").reset_index().SQ
+general16S_diluted = general16Sdf.query("Sample == 'Ana'").reset_index().Cq
+cyano16S_diluted =     cyano16Sdf.query("Sample == 'Ana'").reset_index().Cq
+nifH_diluted =             nifHdf.query("Sample == 'Ana'").reset_index().Cq
+standards = pd.DataFrame( {"dilutions":dilutions, "general16S":general16S_diluted, "cyano16S":cyano16S_diluted, "nifH":nifH_diluted})
+
+help(standards.to_csv)
+
+standards.to_csv("standards.csv", index=False)
+
+## also, we need an experimental setup matrix for the rtpcr package, see below. 
+
+## we have three genes, each with efficiencies.
+## efficiences calculated from rtpcr package below:
+
+#       Gene     Slope        R2        E
+# general16S -7.584238 0.6015711 1.354729
+#   cyano16S -6.655762 0.4317308 1.413337
+#       nifH -4.914745 0.3650430 1.597605
+
+## so
+general16s_eff = 1.354729
+cyano16s_eff = 1.413337
+nifH_eff = 1.597605
+
+general16s_exp.head()
+
+cyano16s_exp.head()
+
+nifH_exp.head()
+
+
+nifH_exp.location == 
+general16s_exp.location == 
+
+expMat = pd.DataFrame({
+              "location": nifH_exp.location,
+                  "rock": nifH_exp.rock,
+                  "moss": nifH_exp.moss,
+                  "nifH":[nifH_eff] * nifH_exp.shape[0],
+               "Ct_nifH":nifH_exp.Cq,
+              "cyano16s":[cyano16s_eff] * cyano16s_exp.shape[0],
+           "Ct_cyano16s":cyano16s_exp.Cq,
+                   "ref":[general16s_eff] * general16s_exp.shape[0],
+                "Ct_ref":general16s_exp.Cq,
+        })
+
+
+expMat.sort_values(["rock","moss","location"])
+
+## need to fix the  NTC samples, they shouldn't have a near/far 
+
+expMat.to_csv("expMat.csv", index=True)
+
+## and back to R
 
 library(rtpcr)
 
-## try an efficiency calculation...they need a 
+## try an efficiency calculation...
+
+standards <- read.csv("standards.csv")
+
+eff <- efficiency(standards)
+
+## huh, they get pretty different results from my 
+## calculations. 
+
+## they get higher efficiencies than I calculate.
+## I'll take that. 
+
+## now, how can we use this to transform our cyano16s and nifH cqs into 
+## relative abundances to general16s?
+
+## it looks like, from the documentation, what the package authors
+## call w-delta Ct method, which is very similar to the Pfaffl method,
+## they weight by the PCR efficiency differences before declaring 
+## the fold change relative to a reference gene. 
+
+## funny, they don't seem to have a function for just transforming to
+## relative abundances. Everything is a statistical test. 
+
+## except maybe:
+
+?compute_wDCt()
+
+## for this they want target gene E/ct column pairs, followed by 
+## reference gene/Ct column pairs.  
+## experimental information is held in the first columns.
+
+## make this above, with pandas.  
+
+aa = read.csv("expMat.csv")
+
+compute_wDCt()
+
+    
