@@ -62,7 +62,7 @@ cd /home/daniel/Documents/projects/cliffMosses/qPCR
 
 python3
 
-import qpcr, os
+import qpcr, os, string
 import matplotlib.pyplot as plt; plt.ion()
 import pandas as pd
 from urllib.request import urlretrieve 
@@ -268,4 +268,116 @@ S = nifH_slope
 E = 10**(-1/S) - 1 ## 0.281
 
 ## all really low, but not that different. 
-## it looks like 
+## it looks like  16s and nifH might be comparable using
+## the double delta method, but I think we need a different
+## approach to use these data.  
+
+## let's pretend that we have the near/far data. How would we proceed?
+## mock data...
+
+## Lisa made all plates the same. So theoretically,
+aa = general16Sdf[['Sample']].reset_index()
+aa['rock'] = aa.Sample.str.split("_",expand=True)[0]
+aa['moss'] = aa.Sample.str.split("_",expand=True)[1]
+
+## now add fake data. Let's say the first four rows of 
+## lisa's qPCR plate map represent "near" samples, and 
+## the last represent "far" samples.
+
+## look at the plate map:
+qPCRmap = pd.read_csv("lisa_qPCR_plate_map.csv") 
+
+
+## unwanted (empty) wells: C-H, 11-12, get rid of these:
+## overcoded, but don't want to throw this out, maybe useful later:
+AA = string.ascii_uppercase[2:8]
+BB = list(map(str,range(11,13)))
+CC = [ bb.zfill(2) for bb in BB ]
+throwOutCells = [ aa+cc for aa in AA for cc in CC ]
+del(AA, BB, CC)
+
+## remove these:
+general16s_exp = (
+                  general16Sdf.drop(index=throwOutCells)
+                                    .query("Sample != 'Ana'")
+                                    .reset_index()
+                  )
+
+cyano16s_exp = (
+                  cyano16Sdf.drop(index=throwOutCells)
+                                    .query("Sample != 'Ana'")
+                                    .reset_index()
+                  )
+
+nifH_exp = (
+                  nifHdf.drop(index=throwOutCells)
+                                    .query("Sample != 'Ana'")
+                                    .reset_index()
+                  )
+
+## following our imaginary data scheme, anything 
+## rows A-D would be "near", and rows E-H would be "far"
+
+AA = list(string.ascii_uppercase[0:4])
+general16s_exp['location'] = [ "near" if aa in AA else "far" for aa in general16s_exp.Well.str[0] ]
+cyano16s_exp['location'] = [ "near" if aa in AA else "far" for aa in cyano16s_exp.Well.str[0] ]
+nifH_exp['location'] = [ "near" if aa in AA else "far" for aa in nifH_exp.Well.str[0] ]
+del(AA)
+
+## and split up our sample name again into sample variables:
+general16s_exp['rock'] = general16s_exp.Sample.str.split("_",expand=True)[0]
+general16s_exp['moss'] = general16s_exp.Sample.str.split("_",expand=True)[1]
+cyano16s_exp['rock'] = cyano16s_exp.Sample.str.split("_",expand=True)[0]
+cyano16s_exp['moss'] = cyano16s_exp.Sample.str.split("_",expand=True)[1]
+nifH_exp['rock'] = nifH_exp.Sample.str.split("_",expand=True)[0]
+nifH_exp['moss'] = nifH_exp.Sample.str.split("_",expand=True)[1]
+
+general16s_exp.head()
+cyano16s_exp.head()
+nifH_exp.head()
+
+## okay, how would we analyze this?
+## it looks like we have two predictors,
+## moss species and rock type
+
+## we need to correct the Cq values to 
+## make them comparable, to see if NifH
+## and cyanobacterial 16S went up in 
+## proportion to regular 16S abundances.
+
+## this brings us back to the Pfaffl Method
+## can it be used for such low efficiencies?
+
+
+## there is this package R:
+https://github.com/mirzaghaderi/rtpcr
+
+## maybe we should switch over to R...
+
+
+## following the above website, first let's 
+## see if their amplification efficiencies
+## match our initial calculations
+
+## before we head over to R, do the reformatting
+## in python, so much nicer...
+## for efficiencies, they need a df with a column of 
+## dilution rates, and a column for each gene:
+
+general16Sdf
+cyano16Sdf
+nifHdf
+
+general16Sdf.query("Sample == 'Ana'")
+
+cyano16Sdf.query("Sample == 'Ana'")
+
+nifHdf.query("Sample == 'Ana'")
+
+cyano16Sdf
+nifHdf
+
+
+library(rtpcr)
+
+## try an efficiency calculation...they need a 
