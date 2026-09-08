@@ -201,6 +201,13 @@ ax.set_xlabel('dilution')
 plt.text(0.5,20,f"{general16S_slope}x + {general16S_interc}")
 plt.text(0.5,18,f"r2={round(general16S_r2,3)}")
 
+## we finally got the near far data from lisa.
+## also, which plot/frame it came from. Data are paired,
+## each near far is from same frame, but four frames 
+## sampled. 
+## This means we need two extra columns:
+
+
 ##### get cyano16sdf slope
 cyano16Sdf = pd.read_csv("/home/daniel/Documents/projects/mossSymbiosis/"
                  "cliffMosses/mossCyano_qPCR/cyano16S/csv/"
@@ -285,8 +292,8 @@ aa['moss'] = aa.Sample.str.split("_",expand=True)[1]
 ## the last represent "far" samples.
 
 ## look at the plate map:
-qPCRmap = pd.read_csv("lisa_qPCR_plate_map.csv") 
 
+qPCRmap = pd.read_csv("lisa_qPCR_plate_map.csv") 
 
 ## unwanted (empty) wells: C-H, 11-12, get rid of these:
 ## overcoded, but don't want to throw this out, maybe useful later:
@@ -319,11 +326,28 @@ nifH_exp = (
 ## following our imaginary data scheme, anything 
 ## rows A-D would be "near", and rows E-H would be "far"
 
-AA = list(string.ascii_uppercase[0:4])
-general16s_exp['location'] = [ "near" if aa in AA else "far" for aa in general16s_exp.Well.str[0] ]
-cyano16s_exp['location'] = [ "near" if aa in AA else "far" for aa in cyano16s_exp.Well.str[0] ]
-nifH_exp['location'] = [ "near" if aa in AA else "far" for aa in nifH_exp.Well.str[0] ]
-del(AA)
+## our list of "near" rows:
+#AA = list(string.ascii_uppercase[0:4]) ## original, filler
+AA = ["A","C","E","G"]
+general16s_exp.reset_index()
+general16s_exp['location'] = [ "near" if aa in AA else "far" for aa in general16s_exp.reset_index().Well.str[0] ]
+cyano16s_exp['location'] = [ "near" if aa in AA else "far" for aa in cyano16s_exp.reset_index().Well.str[0] ]
+nifH_exp['location'] = [ "near" if aa in AA else "far" for aa in nifH_exp.reset_index().Well.str[0] ]
+
+## we need a column giving the specific subsite/frame
+subsite =  pd.Series([ "S3", "S3",   "S3", "L12", "L21", "L12", "G01", "G01", "G22", "L24", "NTC", 
+                       "S3", "S3",   "S3", "L12", "L21", "L12", "G01", "G01", "G22", "L24", "NTC", 
+                       "S5", "S13", "S10", "L21", "L22", "L14", "G03", "G05", "G23", 
+                       "S5", "S13", "S10", "L21", "L22", "L14", "G03", "G05", "G23", 
+                       "S9", "S23", "S21", "L22", "L23", "L21", "G05", "G22", "G24", 
+                       "S9", "S23", "S21", "L22", "L23", "L21", "G05", "G22", "G24", 
+                      "S21", "S24", "S22", "L23", "L24", "L22", "G21", "G23", "G25", 
+                      "S21", "S24", "S22", "L23", "L24", "L22", "G21", "G23", "G25"], 
+               index=general16s_exp.index)
+
+general16s_exp['subsite'] = subsite
+cyano16s_exp['subsite'] = subsite
+nifH_exp['subsite'] = subsite
 
 ## and split up our sample name again into sample variables:
 general16s_exp['rock'] = general16s_exp.Sample.str.split("_",expand=True)[0]
@@ -335,28 +359,13 @@ nifH_exp['moss'] = nifH_exp.Sample.str.split("_",expand=True)[1]
 
 ## NTC samples. Fix this, no rocks and moss or controls:
 nifH_exp.set_index("Well", inplace=True)
-nifH_exp.loc[["A12","B12"],["rock","moss"]] = "None"
+nifH_exp.loc[["A12","B12"],["location","rock","moss"]] = "None"
 general16s_exp.set_index("Well", inplace=True)
-general16s_exp.loc[["A12","B12"],["rock","moss"]] = "None"
+general16s_exp.loc[["A12","B12"],["location","rock","moss"]] = "None"
 cyano16s_exp.set_index("Well", inplace=True)
-cyano16s_exp.loc[["A12","B12"],["rock","moss"]] = "None"
+cyano16s_exp.loc[["A12","B12"],["location","rock","moss"]] = "None"
 
-## the NTC samples should also have nothing for location. 
-## maybe this is where we can state they are controls:
 
-nifH_exp.set_index("Well", inplace=True)
-
-nifH_exp.loc[["A12","B12"],"location"] = "control"
-
-general16s_exp.loc[["A12","B12"],"location"] #= "control"
-
-cyano16s_exp.moss == nifH_exp.moss
-
-general16s_exp.head()
-
-cyano16s_exp.head()
-
-nifH_exp.head()
 
 ## okay, how would we analyze this?
 ## it looks like we have two predictors,
@@ -369,7 +378,6 @@ nifH_exp.head()
 
 ## this brings us back to the Pfaffl Method
 ## can it be used for such low efficiencies?
-
 
 ## there is this package R:
 https://github.com/mirzaghaderi/rtpcr
@@ -431,9 +439,24 @@ cyano16s_exp.head()
 
 nifH_exp.head()
 
+## we need to define replicates. 
+## each rocktype/moss-host/proximity had 4 replicates. 
+## for example A2-D2 is a set of four replicates 
+## for sandstone ("S"), Hypnum cupressiformum ("HC"), 
+## also, samples are paired, each near and far came 
+## from a different site/frame. 
+## ugh. complicated. 
 
-nifH_exp.location == 
-general16s_exp.location == 
+## not sure if I can exactly resolve this issue right now.
+## I think this paired design will require us to 
+## generate our tests, and not use the prepared ones in 
+## the rtqpcr package. 
+
+## any, assign a replicate number 1-4, based on the
+## rock type / moss host / near-far combination
+## may change this later:
+
+expMat.index  
 
 expMat = pd.DataFrame({
               "location": nifH_exp.location,
@@ -447,19 +470,41 @@ expMat = pd.DataFrame({
                 "Ct_ref":general16s_exp.Cq,
         })
 
+expMat.head(15)
 
-expMat.sort_values(["rock","moss","location"])
+## also add the subsite data here:
+expMat['subsite'] = subsite
+# ## the NTC samples should also have nothing for location. 
+# ## maybe this is where we can state they are controls?
+expMat.loc[["A12","B12"],["location","rock","moss"]] = "control"
 
-## need to fix the  NTC samples, they shouldn't have a near/far 
+## we also need the replication column
+replicate = list(range(1,5)) * 19
 
-expMat.to_csv("expMat.csv", index=True)
+replication = ["1", "2", "3", "4", "1", "2", "3", "4", 
+               "1", "2", "3", "4", "1", "2", "3", "4", 
+               "1", "2", "3", "4", "1", "2", "3", "4", 
+               "1", "2", "3", "4", "1", "2", "3", "4", 
+               "1", "2", "3", "4", "1", "2", "3", "4", 
+               "1", "2", "3", "4", "5", "1", "2", "3", "4", "5", 
+               "1", "2", "3", "4", "1", "2", "3", "4", 
+               "1", "2", "3", "4", "1", "2", "3", "4", 
+               "1", "2", "3", "4", "1", "2", "3", "4", 
+               "1", "2"]
+
+expMat.sort_values(["rock","moss","location"], inplace=True)
+
+expMat["replicate"] = replication
+
+expMat = expMat[["subsite","rock","moss","location","replicate","nifH","Ct_nifH","cyano16s","Ct_cyano16s","ref","Ct_ref"]]
+
+expMat.to_csv("expMat.csv", index_label='Well')
 
 ## and back to R
 
 library(rtpcr)
 
 ## try an efficiency calculation...
-
 standards <- read.csv("standards.csv")
 
 eff <- efficiency(standards)
@@ -491,8 +536,113 @@ eff <- efficiency(standards)
 
 ## make this above, with pandas.  
 
-aa = read.csv("expMat.csv")
+aa <- read.csv("expMat.csv", row.names=1)
+## for the moment, let's exclude subsite.
+aa <- aa[, c("rock","moss","location","replicate","nifH","Ct_nifH","cyano16s","Ct_cyano16s","ref","Ct_ref")]
+## and get rid of water controls:
+aa <- aa[aa$rock != "control",]
 
-compute_wDCt()
+bb <- compute_wDCt(
+        x=aa,
+        block=NULL,
+        numOfFactors=3,
+        numberOfrefGenes=1, 
+        set_missing_target_Ct_to_40 = FALSE
+      )
 
-    
+## works, but not sure what is going on here. 
+## I give it two genes, but only delta wCT is 
+## given back?
+
+## same for their sample data:
+
+data <- read.csv(system.file("extdata", "data_2factorBlock3ref.csv", package = "rtpcr"))
+
+data
+
+aa <- compute_wDCt(x = data,
+       numOfFactors = 2,
+       numberOfrefGenes = 3,
+       block = "block")
+
+## if we simplify it to one column, does this change anything?:
+
+data2 <- data[,c( "Type","Concentration","block","Rep","PO","Ct_PO","Ct_ref1","ref2","Ct_ref2","ref3","Ct_ref3")]
+bb <- compute_wDCt(x = data2,
+       numOfFactors = 1,
+       numberOfrefGenes = 3,
+       block = "block")
+
+data3 <- data[,c( "Type","Concentration","block","Rep","NLM","Ct_NLM","Ct_ref1","ref2","Ct_ref2","ref3","Ct_ref3")]
+cc <- compute_wDCt(x = data3,
+       numOfFactors = 1,
+       numberOfrefGenes = 3,
+       block = "block")
+
+cbind(aa$wDCt, bb$wDCt, cc$wDCt, bb$wDCt - cc$wDCt)
+
+## let's try some of their anova functions:
+
+bb <- ANOVA_DCt(
+          x=aa,
+          block=NULL,
+          numOfFactors=3,
+          numberOfrefGenes=1, 
+          alpha=0.05,
+          p.adj="none",
+          analyseAllTarget=TRUE,
+          model=NULL,
+          modelBased_se=TRUE,
+          set_missing_target_Ct_to_40=FALSE
+      )
+
+
+##########################################################
+## to do a repeated measure / paired-group test, according to github site:
+bb <- ANOVA_DCt(
+          x=aa,
+          block=NULL,
+          numOfFactors=3,
+          numberOfrefGenes=1, 
+          alpha=0.05,
+          p.adj="none",
+          analyseAllTarget=TRUE,
+          model=wDCt ~ rock*moss*location + (1 | replicate),
+          modelBased_se=TRUE,
+          set_missing_target_Ct_to_40=FALSE
+      )
+
+bb$perGene$cyano16s$ANOVA_table
+
+bb$perGene$nifH$ANOVA_table
+
+## nifH seems to respond more to rock type, and moss
+## cyano16S seems responsive to the full model (rock*moss*location)
+
+## how do we plot this?
+
+data <- read.csv(system.file("extdata", "data_3factor.csv", package = "rtpcr"))
+
+df <- bb$relativeExpression
+
+plotFactor(
+  df,
+  x_col = "location",       
+  y_col = "log2FC",       
+  group_col = "moss",   
+  facet_col = "rock",    
+  Lower.se_col = "Lower.se.log2FC",
+  Upper.se_col = "Upper.se.log2FC",
+  letters_col = "sig",
+  letters_d = 0.3,
+  col_width = 0.7, 
+  dodge_width = 0.7,
+  color = "black",
+  base_size = 14, 
+  alpha = 1,
+  legend_position = c(0.1, 0.2))
+
+## looks pretty, but confused, looks like some overplotting. 
+## maybe this is trying to plot both genes. 
+
+
