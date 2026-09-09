@@ -503,6 +503,9 @@ expMat.to_csv("expMat.csv", index_label='Well')
 ## and back to R
 
 library(rtpcr)
+library(stats)
+library(lme4)
+library(lmerTest)
 
 ## try an efficiency calculation...
 standards <- read.csv("standards.csv")
@@ -621,8 +624,6 @@ bb$perGene$nifH$ANOVA_table
 
 ## how do we plot this?
 
-data <- read.csv(system.file("extdata", "data_3factor.csv", package = "rtpcr"))
-
 df <- bb$relativeExpression
 
 plotFactor(
@@ -645,4 +646,491 @@ plotFactor(
 ## looks pretty, but confused, looks like some overplotting. 
 ## maybe this is trying to plot both genes. 
 
+## if we break it up, is the plot more understandeable?
+
+nifOnlyANOVA <- ANOVA_DCt(
+                          x=aa,
+                          block=NULL,
+                          numOfFactors=3,
+                          numberOfrefGenes=1, 
+                          alpha=0.05,
+                          p.adj="none",
+                          analyseAllTarget="nifH",
+                          model=wDCt ~ rock*moss*location + (1 | replicate),
+                          modelBased_se=TRUE,
+                          set_missing_target_Ct_to_40=FALSE
+                      )
+
+
+nifOnlyANOVA_RE <- nifOnlyANOVA$relativeExpression
+
+plotFactor(
+  nifOnlyANOVA_RE,
+  x_col = "location",       
+  y_col = "log2FC",       
+  group_col = "moss",   
+  facet_col = "rock",    
+  Lower.se_col = "Lower.se.log2FC",
+  Upper.se_col = "Upper.se.log2FC",
+  letters_col = "sig",
+  letters_d = 0.3,
+  col_width = 0.7, 
+  dodge_width = 0.7,
+  color = "black",
+  base_size = 14, 
+  alpha = 1,
+  legend_position = c(0.1, 0.2))
+
+
+cyano16sOnlyANOVA <- ANOVA_DCt(
+                          x=aa,
+                          block=NULL,
+                          numOfFactors=3,
+                          numberOfrefGenes=1, 
+                          alpha=0.05,
+                          p.adj="none",
+                          analyseAllTarget="cyano16s",
+                          model=wDCt ~ rock*moss*location + (1 | replicate),
+                          modelBased_se=TRUE,
+                          set_missing_target_Ct_to_40=FALSE
+                      )
+
+cyano16sOnlyANOVA_RE <- cyano16sOnlyANOVA$relativeExpression
+
+head(cyano16sOnlyANOVA_RE)
+
+c16sRE.complete <- cyano16sOnlyANOVA_RE[complete.cases( cyano16sOnlyANOVA_RE), ]
+
+c16sRE.complete
+
+dev.new()
+
+plotFactor(
+  cyano16sOnlyANOVA_RE,
+  x_col = "location",       
+  #y_col = "log2FC",       
+  y_col = "RE", ## I'm not sure what control is being used for the FC
+  group_col = "moss",   
+  facet_col = "rock",    
+  Lower.se_col = "Lower.se.log2FC",
+  Upper.se_col = "Upper.se.log2FC",
+  letters_col = "sig",
+  letters_d = 0.3,
+  col_width = 0.7, 
+  dodge_width = 0.7,
+  color = "black",
+  base_size = 14, 
+  alpha = 1,
+  )
+
+
+## looks like maybe we have to do this the hard way.
+## if I understand correctly, RE and wdct should be
+## independent of any experimental setup, and just 
+## calculated using the behavior of the reference
+## genes as a corrector for "abundance". 
+
+## if this is tree, then raw, unavereaged RE should be constant 
+## for a sample in any comparison...
+
+ 
+str(cyano16sOnlyANOVA, max.level=1)
+str(cyano16sOnlyANOVA$relativeExpression, max.level=1)
+str(cyano16sOnlyANOVA$perGene, max.level=1)
+str(cyano16sOnlyANOVA$perGene$cyano16s, max.level=1)
+
+## seems like our wDCT is stored here:
+cyano16sOnlyANOVA$perGene$cyano16s$Final_data
+cyano16sOnlyANOVA$perGene$cyano16s$Final_data$wDCt
+
+## is this same as if we did a multiple gene test?
+
+bb$perGene$cyano16s$Final_data$wDCt ## our two-gene test
+
+cyano16sOnlyANOVA$perGene$cyano16s$Final_data$wDCt == bb$perGene$cyano16s$Final_data$wDCt
+
+## seems right. And is this the same output, if we give the compute_wDCt() command one gene?:
+
+compute_wDCt()
+
+## nifH only :
+cyano16sOnly <- read.csv("expMat.csv", row.names=1)
+## for the moment, let's exclude subsite, and the nifH gene
+cyano16sOnly <- cyano16sOnly[, c("rock","moss","location","replicate","cyano16s","Ct_cyano16s","ref","Ct_ref")]
+## and get rid of water controls:
+cyano16sOnly <- cyano16sOnly[cyano16sOnly$rock != "control",]
+
+cyano16sOnly
+
+test_wDCt <- compute_wDCt(
+                          x=cyano16sOnly,
+                          block=NULL,
+                          numOfFactors=3,
+                          numberOfrefGenes=1, 
+                          set_missing_target_Ct_to_40 = FALSE
+                        )
+
+test_wDCt$wDCt
+
+bb$perGene$cyano16s$Final_data$wDCt
+
+cyano16sOnlyANOVA$perGene$cyano16s$Final_data$wDCt
+
+## these are all consistent. So individual wDCt datas are
+## recoverable. We can use these values to do our own 
+## stats.
+
+## so, add this as a data column? Then do a few tests. 
+
+expMat <- read.csv("expMat.csv", row.names=1)
+
+## rerun the wDCt for all samples, including controls.
+
+
+## first nif:
+nifOnly <- read.csv("expMat.csv", row.names=1)
+nifOnly <- nifOnly[, c("rock","moss","location","replicate","nifH","Ct_nifH","ref","Ct_ref")]
+
+## and let's assume a failed reaction means very low 
+## DNA, set to 40 reactions:
+
+nif_wDCt <- compute_wDCt(
+                          x=nifOnly,
+                          block=NULL,
+                          numOfFactors=3,
+                          numberOfrefGenes=1, 
+                          set_missing_target_Ct_to_40 = TRUE
+                        )
+
+expMat["nif_wDCt"] <- nif_wDCt$wDCt
+
+## without setting NAs to 40, we still have 21 NAs in wDCt
+## with setting NAs to 40, we have 19 NAs in wDCt. 
+## for now, let's keep NAs out. Later, rerun analysis with
+## for comparison.
+
+cyano16sOnly <- read.csv("expMat.csv", row.names=1)
+cyano16sOnly <- cyano16sOnly[, c("rock","moss","location","replicate","cyano16s","Ct_cyano16s","ref","Ct_ref")]
+
+cyano16s_wDCt <- compute_wDCt(
+                               x=cyano16sOnly,
+                               block=NULL,
+                               numOfFactors=3,
+                               numberOfrefGenes=1, 
+                               set_missing_target_Ct_to_40 = FALSE
+                              )
+expMat["cyano16s_wDCt"] <- cyano16s_wDCt$wDCt
+
+write.csv(expMat, file="expMat.csv")
+
+## looks good.
+## the next step would be to convert to RE and
+## make quantitative comparisons...
+
+expMat <- read.csv(file="expMat.csv", row.names=1)
+
+## the next step would be to calculate fold change 
+## comparing near levels to far. In this case, 
+## "far" could be considered the control for the
+## presence of the plant. 
+
+## RE values might also be useful to calculate, 
+## these should be independent of any experimental
+## comparisons. 
+
+## so how do we do these paired comparisons?
+
+## fold change should be the base 2 exponentiated 
+## of the change between the control and treatment
+
+FC=2^-(wΔCT_Tr - wΔCT_Co)
+
+## which for us means:
+FC=2^-(wΔCT_near - wΔCT_far)
+
+## seems like this could be switched for simplicity:
+
+FC=2^(wΔCT_far - wΔCT_near)
+
+## for one pair of near/far values in our matrix, 
+## nifH
+
+far = expMat["B09", "nif_wDCt"]
+near = expMat["A09", "nif_wDCt"]
+
+FC_i = 2^(far - near)
+
+## just checking:
+2^(far - near)
+2^-(near - far)
+## yep, equivalent.
+
+
+## okay, so how do we get a matrix of these values?
+
+aa <- expMat[expMat$location == "far",]
+bb <- expMat[expMat$location == "near",]
+
+## just checking
+all(aa$subsite == bb$subsite)
+all(aa$rock == bb$rock)
+all(aa$moss == bb$moss)
+all(aa$replicate == bb$replicate)
+## looks good
+
+## so for nifH FC changes...
+
+FC_i = 2^(far - near)
+
+FC_nifH <- 2^(aa$nif_wDCt - bb$nif_wDCt)
+
+## this would be good for plotting, etc. 
+## but maybe let's stick to RE values. 
+## so that that all samples remain represented:
+
+## for one wDCt value:
+2^-(expMat["B09","nif_wDCt"])
+2^-(expMat["D09","nif_wDCt"])
+
+expMat["A06",]
+
+head(expMat, 20)
+
+RE.i <- 2^-(expMat["E03","nif_wDCt"])
+
+## add this to our big matrix:
+
+nif_RE <- 2^-(expMat["nif_wDCt"])
+expMat['nif_RE'] <- nif_RE
+
+cyano16s_RE <- 2^-(expMat["cyano16s_wDCt"])
+expMat['cyano16s_RE'] <- cyano16s_RE
+
+head(expMat)
+
+## good, save it out
+write.csv(expMat, file="expMat.csv")
+
+
+
+## seems to work. Now what?
+
+## plan:
+
+## broadest possible comparison - do a paired t-test
+## of near vs. far, all samples, using RE values,
+## for both genes
+
+
+## and this probably won't say much, so then 
+## build a mixed model and delve into the 
+## complexities.  
+
+## plot everything
+
+## make a teaching script for lisa 
+## make a working  script for Thomas
+
+## and try to be done...yeah right...
+
+#### step 1: big ass t-test: ####
+
+## we want to compare the relative expression
+## (abundance) of nifG and cyanobacterial 16S
+## in near vs. far samples.
+
+## check if there is any correlation among plot
+## pairs:
+
+near_nifH_RE <- expMat[expMat$location == "near","nif_RE"]
+far_nifH_RE <- expMat[expMat$location == "far","nif_RE"]
+
+
+cor.test(x = near_nifH_RE, y = far_nifH_RE, 
+         method = c("pearson"), 
+         conf.level = 0.95)
+
+## they don't seem correlated. 
+
+par(pty = "s")
+
+boxplot(expMat$nif_RE)
+
+boxplot(expMat$nif_RE ~ expMat$location)
+## we have one very large outlier in the far data
+
+expMat[which(expMat$nif_RE > 0.2),] ## F09
+## for the moment, get rid of this pair?:
+## outlier is:
+
+expMat[expMat$subsite == "G22" & 
+       expMat$moss == "DS", ]
+
+## remove this?
+expMatNoNifOut <- expMat[rownames(expMat) !="F09",]
+## the "near" partner sample is:
+expMatNoNifOut <- expMatNoNifOut[rownames(expMatNoNifOut) !="E09",]
+## remove controls while we are at it:
+expMatNoNifOut <- expMatNoNifOut[expMatNoNifOut$location !="control",]
+near_nifH_RE <- expMatNoNifOut[expMatNoNifOut$location == "near","nif_RE"]
+far_nifH_RE <- expMatNoNifOut[expMatNoNifOut$location == "far","nif_RE"]
+
+
+boxplot(expMatNoNifOut$nif_RE ~ expMatNoNifOut$location)
+
+bartlett.test(expMatNoNifOut$nif_RE ~ expMatNoNifOut$location) ## they definitely have different variances...
+
+## try it anyway:
+
+## without outlier
+t.test(x=near_nifH_RE,y=far_nifH_RE,
+       alternative = "greater",
+       mu = 0, 
+       paired = TRUE,   
+       var.equal = FALSE,
+       conf.level = 0.95)
+
+## t=0.866, df=22, p=0.1979
+## estimated mean difference of RE=0.00447
+
+mean(near_nifH_RE, na.rm=TRUE)
+## 0.006564707
+mean(far_nifH_RE, na.rm=TRUE)
+## 0.003259197
+
+## small, but our REs are small. In the right 
+## direction, slightly higher in near samples
+## but too noisy for an easy yes/no, as expected.
+
+## the outlier probably weakens the support for the 
+## hypothesis further:
+#near_nifH_RE <- expMat[expMat$location == "near","nif_RE"]
+#far_nifH_RE <- expMat[expMat$location == "far","nif_RE"]
+#t.test(x=near_nifH_RE,y=far_nifH_RE,
+#       alternative = "greater",
+#       mu = 0, 
+#       paired = TRUE,   
+#       var.equal = FALSE,
+#       conf.level = 0.95)
+## yep. but we are justified in removing it, I think. That sample
+## has astronomically high values in both genes
+
+## repeat for cyano16s: ##
+
+## check correlation
+
+near_cyano16s_RE <- expMat[expMat$location == "near","cyano16s_RE"]
+far_cyano16s_RE <- expMat[expMat$location == "far","cyano16s_RE"]
+cor.test(x = near_cyano16s_RE, y = far_cyano16s_RE, 
+         method = c("pearson"), 
+         conf.level = 0.95)
+
+## again, uncorrelated.
+
+
+par(pty = "s")
+
+boxplot(expMat$cyano16s_RE) ## another outlier...also F09. I think we have a case for throwing this out. 
+
+## remove outlier
+expMatNoCyano16sOut <- expMat[rownames(expMat) !="F09",]
+## and control, while we're at it:
+expMatNoCyano16sOut <- expMatNoCyano16sOut[expMatNoCyano16sOut$location !="control",]
+## the "near" partner sample is:
+expMatNoCyano16sOut <- expMatNoCyano16sOut[rownames(expMatNoCyano16sOut) !="E09",]
+
+near_cyano16s_RE <- expMatNoCyano16sOut[expMatNoCyano16sOut$location == "near","cyano16s_RE"]
+far_cyano16s_RE <- expMatNoCyano16sOut[expMatNoCyano16sOut$location == "far","cyano16s_RE"]
+
+boxplot(expMatNoCyano16sOut$cyano16s_RE ~ expMatNoCyano16sOut$location) ## slighter higher RE in near samples
+
+
+bartlett.test(expMatNoCyano16sOut$nif_RE ~ expMatNoCyano16sOut$location) ## they also definitely have different variances...
+
+
+## without outlier
+t.test(x=near_cyano16s_RE,y=far_cyano16s_RE,
+       alternative = "greater",
+       mu = 0, 
+       paired = TRUE,   
+       var.equal = FALSE,
+       conf.level = 0.95)
+
+## data:  near_cyano16s_RE and far_cyano16s_RE
+## t = 0.48219, df = 22, p-value = 0.3172
+## alternative hypothesis: true mean difference is greater than 0
+## 95 percent confidence interval:
+##  -0.2153054        Inf
+## sample estimates:
+## mean difference
+##      0.08406578
+
+## so also in the right direction but not statistically significant.
+
+### next step: more sophisticated model. ###
+
+## the next step here would be a mixed model. 
+
+
+## how would this look like in a model formula?
+## https://cran.r-project.org/web/packages/lme4/vignettes/lmer.pdf
+
+https://www.phonetik.uni-muenchen.de/studium_lehre/lehrmaterialien/R_speech_processing/stat_phonetics_intro/topics/06_statistics.html
+
+## nifH mixed model:
+
+## response variable is nifH_RE
+
+## I think 
+## rock type is one grouping variable
+## another is the pairing, where near and far samples came from the same subsite
+ 
+
+
+## my head hurts when building these models. 
+## anyway, do we think the intercept or the slope will vary 
+## with rock type? or both? 
+## both. Random intercept because base abundances of genes might be 
+## different, random slope because the rock is changing the 
+## microsite conditions that may make the effect of a fern root's 
+## efforts to recruit microbes (pH)
+## because paired, assume 
+
+## okay, how to code this:
+
+## remove outlier
+expMat_noOut <- expMat[rownames(expMat) !="F09",]
+## the partner sample is:
+expMat_noOut <- expMat_noOut[rownames(expMat_noOut) !="E09",]
+## and control
+expMat_noOut <- expMat_noOut[expMat_noOut$location !="control",]
+
+## some thing like this?:
+
+aa <- lmer(nif_RE ~ location + moss + (location | rock) + (1 / subsite), data = expMat_noOut)
+
+## or maybe 
+
+bb <- lmer(nif_RE ~ location + moss + (moss | rock) + (1 / subsite), data = expMat_noOut)
+
+fixef(aa)
+fixef(bb)
+
+save(aa, file="lmerOutput_9.9.26.rda")
+
+## ugh brain hurts.
+
+load(file="lmerOutput_9.9.26.rda")
+
+anova(aa)
+
+data("sleepstudy", package="lme4")
+
+m <- lmer(Reaction ~ Days + (Days | Subject), sleepstudy)
+
+anova(m)
+
+anova(aa) ## why doesn't this work?
+
+## meh. Work on it tomorrow. 
 
