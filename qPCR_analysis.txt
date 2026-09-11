@@ -1224,19 +1224,19 @@ zoop <- ggplot(expMat_noOut, aes(x=moss, y=cyano16s_RE)) +
                         geom_boxplot() 
 zoop 
 
-## last analysis step, bring up the controls for comparison. 
-## generally, try the models with the assumption that a 
-## failed qPCR reaction is due to low abundance of DNA
-
-## also a good chance to clean this up into a simple analysis
+## this is starting to disintegrate
+## maybe time to clean this up into a simple analysis
 
 ## would be good to make a notebook. 
+
+##### starting over #########
 
 ## so start from (near to) the beginning, rerun with controls
 ## and setting NAs to 40 cycles.
 
 library(rtpcr)
 library(stats)
+library(ggplot2)
 
 ## the original raw data is this:
 
@@ -1257,8 +1257,9 @@ qPCR['nifH'] <- eff$Efficiency[eff$Efficiency$Gene == 'nifH',"E"]
 qPCR['cyano16s'] <- eff$Efficiency[eff$Efficiency$Gene == 'cyano16S',"E"]
 qPCR['ref'] <- eff$Efficiency[eff$Efficiency$Gene == 'general16S',"E"]
 
-## we need to correct our Ct for nifH and cyano16s with our reference 16s
-## this has to be done one-by-one
+## we need to adjust our raw Ct values for nifH and cyano16s 
+## using our reference 16s Ct values.
+## using the rtpcr package, this has to be done one gene at a time.
 
 nifHonly <- qPCR[, c("rock","moss","location","replicate","nifH","Ct_nifH","ref","Ct_ref")]
 qPCR['nifH_wDCt'] <- compute_wDCt(
@@ -1281,28 +1282,7 @@ qPCR['cyano16s_wDCt'] <- compute_wDCt(
 ## pertinent: 
 https://github.com/mirzaghaderi/rtpcr/blob/main/Method.md
 
-## from these wDCt we can calculate "relative expression" level
-## this has no absolute value, but can be compared to 
-## water controls within the gene to indicate non-zero expression, 
-## and to each other for the effects of ecological changes 
-## on abundances. Since the Ct of general 16s is already subtracted,
-## we can assume some level of amplification over 
-## typical background amplification of 16s and nif homologs. 
-## hard to say if it is a complete correction, but 
-## it is at least an adjustment.  
-## however, we also need to subtract the levels observed
-## for each gene in our water control.  
 
-## this should be the calculation for RE:
-
-qPCR["nifH_RE"] <- 2^-(qPCR["nifH_wDCt"])
-qPCR['cyano16s_RE'] <- 2^-(qPCR["cyano16s_wDCt"])
-
-## looking at these negative controls, the cyano16S 
-## are different than I realized. 
-
-## let's rerun our analysis after subtracting the 
-## mean of these.
 
 ## subtract the mean RE of our negative controls for each gene:
 nifH_RE_control <- mean(qPCR[qPCR$subsite=="NTC","nifH_RE"])
@@ -1327,9 +1307,9 @@ prettyNum(qPCR$nifH_RE_corrected)
 prettyNum(qPCR$cyano16s_RE_corrected)
 
 
-###### recovery of cyano16s and nifH data where general 16s failed #####
+###### cleanup of cyano16s and nifH raw Ct data  #####
 
-## it should be possible to interpolate our missing RE values now. 
+## it should be possible to interpolate our missing wDCt values now. 
 ## as in, places where PCRs were successful in the target genes
 ## and not in the reference/house-keeping gene (general 16s). 
 ## We have a several cases in which general 16s but the cycle number
@@ -1367,45 +1347,47 @@ abline(lm(qPCR_noOut$nifH_wDCt ~ qPCR_noOut$Ct_nifH), lty=3)
 anova(lm(qPCR_noOut$nifH_wDCt ~ qPCR_noOut$Ct_nifH))
 
 ## strong linear relationship. That's good
-fit <- lm(nifH_wDCt ~ Ct_nifH, data=qPCR_noOut)
+nifHfit <- lm(nifH_wDCt ~ Ct_nifH, data=qPCR_noOut)
+
+qPCR['nifH_wDCt_predicted'] <- predict(nifHfit, newdata=qPCR["Ct_nifH"]) ## run model on our original data
+
+## how does this look?
+qPCR[,c('nifH_wDCt','nifH_wDCt_predicted')]
+plot(qPCR[,c('nifH_wDCt','nifH_wDCt_predicted')]) ## could be worse.
+
+## fill in where we can with these interpolated values:
 
 ## our nifH Ct points where no or erroneous general 16s results occurred are:
-qPCR[is.na(qPCR$Ct_ref) | qPCR$Ct_ref > 35,] ## 20 places where general 16s ref failed
 
-## the raw nifH Ct vales for these:
-badGeneral16s_Ct_nifH <- qPCR[is.na(qPCR$Ct_ref) | qPCR$Ct_ref > 35, "Ct_nifH", drop=FALSE]
+badGeneral16sRows <- rownames(qPCR[is.na(qPCR$Ct_ref) | qPCR$Ct_ref > 35,])
 
-#use model to predict points value
-nifH_wDCt_interpolated <- predict(fit, badGeneral16s_Ct_nifH)
+## 20 places where general 16s ref failed
 
-badGeneral16s_Ct_nifH 
+## new column, based on the experimental values, but plugging 
+## interpolated values predicted from raw nifH_ct scores and
+## our model in where necessary
 
-nifH_wDCt_interpolated
+nifH_wDCt_interp <- qPCR['nifH_wDCt']
+for (i in badGeneral16sRows){ 
+  nifH_wDCt_interp[i,"nifH_wDCt"] <- qPCR[i,"nifH_wDCt_predicted"]
+}
+qPCR["nifH_wDCt_interp"] <- nifH_wDCt_interp ## add to our data matrix
+
+qPCR[,c("nifH_wDCt","nifH_wDCt_predicted","nifH_wDCt_interp","Ct_ref")]
 
 ## look at them:
-plot(qPCR_noOut$nifH_wDCt ~ qPCR_noOut$Ct_nifH)
+dev.new()
+plot(qPCR$nifH_wDCt ~ qPCR$Ct_nifH)
 abline(lm(qPCR_noOut$nifH_wDCt ~ qPCR_noOut$Ct_nifH), lty=3)
-anova(lm(qPCR_noOut$nifH_wDCt ~ qPCR_noOut$Ct_nifH))
-points(x=qPCR[names(nifH_wDCt_interpolated ),"Ct_nifH"], 
-       y=nifH_wDCt_interpolated,
+points(x=qPCR[badGeneral16sRows,"Ct_nifH"], 
+       y=qPCR[badGeneral16sRows,"nifH_wDCt_interp"],
        col="red",
        cex=2,
        lwd=3,
-)
-
-## merge them with raw data into a new column:
-nifH_wDCt_intpolAdded <- qPCR['nifH_wDCt']
-for (i in names(nifH_wDCt_interpolated)){ 
-  print(i) 
-  nifH_wDCt_intpolAdded[i,] <- print(nifH_wDCt_interpolated[i])
-}
-
-qPCR['nifH_wDCt_intpolAdded'] <- nifH_wDCt_intpolAdded
-
-qPCR[,'nifH_wDCt'] <- nifH_wDCt_interpolated[i]
+       )
 
 dev.new()
-plot(qPCR$Ct_nifH, qPCR$nifH_wDCt_intpolAdded)
+plot(qPCR$nifH_wDCt_interp ~ qPCR$Ct_nifH)
 ## looks okay.
 
 ## cyano16s ## 
@@ -1413,37 +1395,232 @@ plot(qPCR$Ct_nifH, qPCR$nifH_wDCt_intpolAdded)
 ## repeat with the cyano16s missing values that are due to 
 ## failed reactions in general 16s ref
 
-
 qPCR["F09",]
 qPCR_noOut <- qPCR[rownames(qPCR) != "F09",]
 
-dev.new()
-hist( qPCR_noOut$cyano16s_RE_corrected, breaks=60) ## that looks pretty log-normal to me
-
 ## the relationship between final wDCt and original Ct is not as 
 ## strong as with nifH, the interpolation is a bit more hand-wavy:
+
 plot(qPCR_noOut$cyano16s_wDCt ~ qPCR_noOut$Ct_cyano16s)
 abline(lm(qPCR_noOut$cyano16s_wDCt ~ qPCR_noOut$Ct_cyano16s), lty=3)
-anova(lm(qPCR_noOut$cyano16s_wDCt ~ qPCR_noOut$Ct_cyano16s))
 summary(lm(qPCR_noOut$cyano16s_wDCt ~ qPCR_noOut$Ct_cyano16s))
 ## highly significant, but R2 is ~.25. Try it anyway.
 
 ## model
-fit <- lm(qPCR_noOut$cyano16s_wDCt ~ qPCR_noOut$Ct_cyano16s)
+
+cyano16sfit <- lm(cyano16s_wDCt ~ Ct_cyano16s, data=qPCR_noOut)
+qPCR['cyano16s_wDCt_predicted'] <- predict(cyano16sfit, newdata=qPCR["Ct_cyano16s"]) ## run model on our original data
 
 ## our cyano16s Ct points where no or erroneous general 16s results occurred are:
 qPCR[is.na(qPCR$Ct_ref) | qPCR$Ct_ref > 35,] ## 20 places where general 16s ref failed
 
+badGeneral16sRows <- rownames(qPCR[is.na(qPCR$Ct_ref) | qPCR$Ct_ref > 35,])
 
-## the raw cyano16s Ct vales for these:
-badGeneral16s_Ct_cyano16s <- qPCR[is.na(qPCR$Ct_ref) | qPCR$Ct_ref > 35, "Ct_cyano16s", drop=FALSE]
+qPCR['cyano16s_wDCt']
 
-badGeneral16s_Ct_cyano16s 
+cyano16s_wDCt_interp <- qPCR['cyano16s_wDCt']
+for (i in badGeneral16sRows){ 
+  cyano16s_wDCt_interp[i,"cyano16s_wDCt"] <- qPCR[i,"cyano16s_wDCt_predicted"]
+}
+qPCR["cyano16s_wDCt_interp"] <- cyano16s_wDCt_interp ## add to our data matrix
 
-## we actually don't recover much, 6 points. Looks like cyano16s reactions
-## weren't much more successful that the general 16s reactions. 
+qPCR[,c("cyano16s_wDCt","cyano16s_wDCt_predicted","cyano16s_wDCt_interp","Ct_ref")]
+## looks right
+
+dev.new()
+plot(qPCR$cyano16s_wDCt ~ qPCR$Ct_cyano16s)
+abline(lm(qPCR_noOut$cyano16s_wDCt ~ qPCR_noOut$Ct_cyano16s), lty=3)
+points(x=qPCR[badGeneral16sRows,"Ct_cyano16s"], 
+       y=qPCR[badGeneral16sRows,"cyano16s_wDCt_interp"],
+       col="red",
+       cex=2,
+       lwd=3,
+       )
+
+dev.new()
+plot(qPCR$cyano16s_wDCt_interp ~ qPCR$Ct_cyano16s)
+## looks less okay than the nifH interpolations. But 
+## not horrible, I can believe these estimates. 
+## We didn't save much data with these cyano16S,
+## but maybe worth the time. 
+
+## a next step would be to convert these
+## cleaned up Ct values into relative
+## expression, a unitless value that ~represents
+## the original quantity of substrate
+## that was in the DNA samples that were
+## put in the PCR machine. It is relative and
+## comparable to all other values in the study.
+## theoretically.  
+
+## this should be the calculation for RE:
+
+qPCR["nifH_RE"] <- 2^-(qPCR["nifH_wDCt_interp"])
+
+qPCR['cyano16s_RE'] <- 2^-(qPCR["cyano16s_wDCt_interp"])
+
+####### end ct cleanup ######
 
 
-cyano16s_wDCt_interpolated <- predict(fit, badGeneral16s_Ct_cyano16s)
 
-cyano16s_wDCt_interpolated
+###### subtract pure water controls #########
+
+## we have pure-water controls for comparison,
+## to give us an idea of what "zero" really is here.
+
+
+## subtract the mean RE of our negative controls for each gene:
+
+## nifH 
+
+## get the larger RE of our two water-only samples
+#nifH_RE_control <- mean(qPCR[qPCR$subsite=="NTC","nifH_RE"])
+nifH_RE_control <- max(qPCR[qPCR$subsite=="NTC","nifH_RE"])
+
+## subtract all RE values by this
+qPCR["nifH_RE_corrected"] <- qPCR["nifH_RE"] - nifH_RE_control 
+
+## set negatives equal to zero.
+qPCR$nifH_RE_corrected[qPCR$nifH_RE_corrected < 0] <- 0
+
+## sanity checks
+format(qPCR$nifH_RE_corrected, scientific=FALSE)
+
+dev.new()
+hist(qPCR$nifH_RE_corrected, breaks=50)
+
+## cyano16s
+cyano16s_RE_control <- max(qPCR[qPCR$subsite=="NTC",'cyano16s_RE'] )
+qPCR["cyano16s_RE_corrected"] <- qPCR["cyano16s_RE"] - cyano16s_RE_control 
+qPCR$cyano16s_RE_corrected[qPCR$cyano16s_RE_corrected < 0] <- 0
+
+format(qPCR$cyano16s_RE_corrected, scientific=FALSE)
+hist(qPCR$nifH_RE_corrected, breaks=50)
+
+## great, so this should be fairly clean data. 
+
+###### comparisons #########
+
+#### nifH ####
+### near / far ###
+
+## the most basic question is whether
+## there are more cyanos or at least nifH gene copies 
+## near fern rhizomes.
+
+## first, plot it:
+qPCRres <- qPCR[qPCR$subsite != "NTC", c("subsite","rock","moss","location","nifH_RE_corrected","cyano16s_RE_corrected")]
+
+nifH_overview <- ggplot(qPCRres, aes(x=location, y=nifH_RE_corrected, fill=moss)) + 
+                        geom_boxplot() + 
+                        facet_grid(. ~ rock)
+
+nifH_overview 
+
+## to zoom in a bit
+nifH_overview + coord_cartesian(ylim=c(0, .04)) 
+
+
+## t-test
+near_nifH_RE <- qPCRres[qPCRres$location == "near","nifH_RE_corrected"]
+far_nifH_RE <- qPCRres[qPCRres$location == "far","nifH_RE_corrected"]
+
+dev.new()
+boxplot(qPCRres$nifH_RE_corrected ~ qPCRres$location) ## slighter higher RE in near samples
+bartlett.test(qPCRres$nifH_RE_corrected ~ qPCRres$location) ## they also definitely have different variances...
+t.test(x=near_nifH_RE,y=far_nifH_RE,
+       alternative = "greater",
+       mu = 0, 
+       paired = TRUE,   
+       var.equal = FALSE,
+       conf.level = 0.95) 
+
+## as before, difference is in the right direction, but p = .21
+
+## check the linear models/anova:
+nifH_moss_rock_lm <- lm(nifH_RE_corrected ~ moss + rock, qPCRres)
+summary(nifH_moss_rock_lm)
+
+nifH_moss_rock_model <- aov(nifH_RE_corrected ~ moss + rock, qPCRres)
+
+nifH_moss_model <- aov(nifH_RE_corrected ~ moss, qPCRres)
+
+summary(nifH_moss_rock_model)
+
+summary(nifH_moss_model)
+
+nifH_moss_overview <- ggplot(qPCRres, aes(x=moss, y=nifH_RE_corrected, fill=moss)) + 
+                        geom_boxplot() 
+
+nifH_moss_overview
+
+nifH_moss_overview + coord_cartesian(ylim=c(0, .03)) 
+
+## highly significant now for the different moss types,
+## but not for the rock
+
+TukeyHSD(nifH_moss_rock_model, conf.level=.95)
+
+## either way, ANOVA or lm,
+## looks like AV is the moss that makes 
+## the model work, and the level of nifH drops with 
+## other mosses. 
+## but it is probably non-zero in almost all the m
+
+## rock type doesn't test as significantly different
+## in any of the models.
+
+#### end nifH ####
+
+#### cyano16s ####
+
+### near / far ###
+
+qPCRres <- qPCR[qPCR$subsite != "NTC", c("subsite","rock","moss","location","nifH_RE_corrected","cyano16s_RE_corrected")]
+
+cyano16s_overview <- ggplot(qPCRres, aes(x=location, y=cyano16s_RE_corrected, fill=moss)) + 
+                        geom_boxplot() + 
+                        facet_grid(. ~ rock)
+
+cyano16s_overview 
+
+cyano16s_overview + coord_cartesian(ylim=c(0, .1)) 
+## yeah, no signal there in my opinion, as far as
+## near/far. Probably not even worth a test.
+
+## more interesting is the presence of cyanos seems
+## obvious and differentiated than we see
+## with the nifH, more of a clear presence/absence
+
+cyano16s_moss_rock_lm <- lm(cyano16s_RE_corrected ~ moss + rock, qPCRres)
+
+summary(cyano16s_moss_rock_lm)
+
+cyano16s_moss_rock_model <- aov(cyano16s_RE_corrected ~ moss + rock, qPCRres)
+
+cyano16s_moss_model <- aov(cyano16s_RE_corrected ~ moss, qPCRres)
+
+summary(cyano16s_moss_rock_model)
+
+summary(cyano16s_moss_model)
+
+cyano16s_moss_overview <- ggplot(qPCRres, aes(x=moss, y=cyano16s_RE_corrected, fill=moss)) + 
+                        geom_boxplot() 
+
+dev.new()
+cyano16s_moss_overview
+
+
+cyano16s_moss_overview + coord_cartesian(ylim=c(0, .03)) 
+
+## with Cyanos16s, we don't have enough data to make a 
+## model, but we can strongly support the presence
+## of cyanobacteria in several mosses. 
+
+## plus a general picture of nifH presence 
+
+## next time, make notebook for thomas and 
+
+## check melting curves for nifH...
+
+## time to build a notebook for Thomas
