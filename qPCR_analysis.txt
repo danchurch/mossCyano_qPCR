@@ -1074,8 +1074,7 @@ t.test(x=near_cyano16s_RE,y=far_cyano16s_RE,
 
 ## how would this look like in a model formula?
 ## https://cran.r-project.org/web/packages/lme4/vignettes/lmer.pdf
-
-https://www.phonetik.uni-muenchen.de/studium_lehre/lehrmaterialien/R_speech_processing/stat_phonetics_intro/topics/06_statistics.html
+#https://www.phonetik.uni-muenchen.de/studium_lehre/lehrmaterialien/R_speech_processing/stat_phonetics_intro/topics/06_statistics.html
 
 ## nifH mixed model:
 
@@ -1088,49 +1087,363 @@ https://www.phonetik.uni-muenchen.de/studium_lehre/lehrmaterialien/R_speech_proc
 
 
 ## my head hurts when building these models. 
-## anyway, do we think the intercept or the slope will vary 
-## with rock type? or both? 
-## both. Random intercept because base abundances of genes might be 
-## different, random slope because the rock is changing the 
-## microsite conditions that may make the effect of a fern root's 
-## efforts to recruit microbes (pH)
-## because paired, assume 
+
+## the first basic question is, what is the effect of the presence of fern
+## on the abundance of nitrogen-fixing bacteria in mosses,
+## (or vice-versa). So our only fixed effect would be location (near/far) 
+
+## the other factors (rock type, moss-species) are conditioning this 
+## relationship. We want to group by them and control for their effect. 
+## I think this makes them random effects.
+
+## but then the type of random variable... do we think the intercept or 
+## the slope will vary with rock type? or both? 
+## Maybe both. Random intercept definitely because base abundances of 
+## genes (=organisms) is almost certainly different due to pH 
+## and moisture differences, nutrient availability, etc.
+## random slope because the rock may affect  the ability of a fern root's 
+## efforts to recruit microbes. But this is shakier, not sure. 
+
+## and of course we need a random variable to account for the subsite
+## because our samples of near/far are paired. Intercept only, just
+## to account for highly local base differences in abundances
 
 ## okay, how to code this:
 
-## remove outlier
+## start from the data matrix, created through the mess of R/python
+## code above.
+
+library(stats)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+
+expMat <- read.csv("expMat.csv", row.names=1)
+## remove outlier identified above
 expMat_noOut <- expMat[rownames(expMat) !="F09",]
 ## the partner sample is:
 expMat_noOut <- expMat_noOut[rownames(expMat_noOut) !="E09",]
 ## and control
 expMat_noOut <- expMat_noOut[expMat_noOut$location !="control",]
 
+## start with nifH:
+ 
 ## some thing like this?:
 
-aa <- lmer(nif_RE ~ location + moss + (location | rock) + (1 / subsite), data = expMat_noOut)
+aa <- lmer(nif_RE ~ location + (location | rock / moss) + (1 / subsite), data = expMat_noOut)
 
-## or maybe 
+## only problem is that mosses are not shared among the rock types.
 
-bb <- lmer(nif_RE ~ location + moss + (moss | rock) + (1 / subsite), data = expMat_noOut)
+## limestone has very different mosses, no overlap in species: 
+table(expMat_noOut$rock, expMat_noOut$moss)
 
-fixef(aa)
-fixef(bb)
+## so there will be singularity in the model.
 
-save(aa, file="lmerOutput_9.9.26.rda")
+## anyway, test that model. We need to use the lmerTest version of lmer...
 
-## ugh brain hurts.
+aa <- lmerTest::lmer(nif_RE ~ location + (location | rock / moss) + (1 / subsite), data = expMat_noOut)
+## yup, fails. Or rather, reml sampling doesn't converge, unstable model, and singularity due to mosses
+anova(aa) ## and model isn't statistically significant
 
-load(file="lmerOutput_9.9.26.rda")
+## if we leave out moss, to avoid the singularities?
+aa <- lmerTest::lmer(nif_RE ~ location + (location | moss ) + (1 / subsite), data = expMat_noOut)
+anova(aa) 
+## 
 
-anova(aa)
+## anyway, there is no trend in the abundances in either gene, by location
 
-data("sleepstudy", package="lme4")
+## grouped boxplot
+nifHREplot <- ggplot(expMat_noOut, aes(x=location, y=nif_RE, fill=moss)) + 
+                        geom_boxplot() + 
+                        facet_grid(. ~ rock)
+nifHREplot 
 
-m <- lmer(Reaction ~ Days + (Days | Subject), sleepstudy)
+## what are the sample sizes again?:
 
-anova(m)
+table(expMat_noOut$rock, expMat_noOut$moss)
+## most of these have four near and four far samples
+## TA (thamnobryum has 5, Dicranum scoparium has 3 and 3 in 
 
-anova(aa) ## why doesn't this work?
 
-## meh. Work on it tomorrow. 
+dev.new()
+nifHREplot + coord_cartesian(ylim=c(0, .007)) 
 
+
+## not broken up 
+dev.new()
+nifHREplot <- ggplot(expMat_noOut, aes(x=location, y=nif_RE)) + 
+                        geom_boxplot() + 
+                        facet_grid(. ~ rock)
+nifHREplot 
+
+## plot the cyano16S
+
+cyano16splot <- ggplot(expMat_noOut, aes(x=location, y=cyano16s_RE, fill=moss)) + 
+                        geom_boxplot() + 
+                        facet_grid(. ~ rock)
+cyano16splot 
+
+## same. no real trend. From this data I say we have no evidence 
+## that fern rhizomes are preferentially associated with 
+## cyanobacteria or nifH (nitrogen fixers).
+
+## any other questions for this data?
+
+zoop <- ggplot(expMat_noOut, aes(x=moss, y=cyano16s_RE)) + 
+                        geom_boxplot() 
+zoop 
+
+zoop <- ggplot(expMat_noOut, aes(x=rock, y=cyano16s_RE)) + 
+                        geom_boxplot() 
+zoop 
+
+nifHREplot + coord_cartesian(ylim=c(0, .007)) 
+  
+zoop <- ggplot(expMat_noOut, aes(x=moss, y=nif_RE)) + 
+                        geom_boxplot() + 
+                        facet_grid(. ~ rock)
+zoop 
+
+aa <- lmerTest::lmer(nif_RE ~ moss  + (moss|rock) + (1 / subsite), data = expMat_noOut)
+
+aa <- lmerTest::lmer(nif_RE ~ rock  + (rock|moss) + (1 / subsite), data = expMat_noOut)
+
+## classic, non-mixed linear model shows moss species as important for nifH
+anova(lm(nif_RE ~ moss, expMat_noOut))
+anova(lm(nif_RE ~ moss*rock, expMat_noOut)) ## rock really doesn't show a strong effect for nifH, and isn't statistically significant
+
+## not so strong a signal for cyanobacteria
+anova(lm(cyano16s_RE ~ moss, expMat_noOut))
+anova(lm(cyano16s_RE ~ moss*rock, expMat_noOut)) ## same, no good predictor 
+
+zoop <- ggplot(expMat_noOut, aes(x=moss, y=nif_RE)) + 
+                        geom_boxplot() 
+zoop 
+
+zoop <- ggplot(expMat_noOut, aes(x=moss, y=cyano16s_RE)) + 
+                        geom_boxplot() 
+zoop 
+
+## last analysis step, bring up the controls for comparison. 
+## generally, try the models with the assumption that a 
+## failed qPCR reaction is due to low abundance of DNA
+
+## also a good chance to clean this up into a simple analysis
+
+## would be good to make a notebook. 
+
+## so start from (near to) the beginning, rerun with controls
+## and setting NAs to 40 cycles.
+
+library(rtpcr)
+library(stats)
+
+## the original raw data is this:
+
+expMat <- read.csv("expMat.csv", row.names=1)
+qPCR <- expMat[,c("subsite","rock","moss","location", "replicate",
+                          "Ct_nifH","Ct_cyano16s","Ct_ref")]
+
+## standards:
+standards <- read.csv("standards.csv")
+
+## rerun our efficiency analysis 
+eff <- efficiency(standards)
+
+eff$Efficiency
+
+## fill in our experimental ratings with this:
+qPCR['nifH'] <- eff$Efficiency[eff$Efficiency$Gene == 'nifH',"E"]
+qPCR['cyano16s'] <- eff$Efficiency[eff$Efficiency$Gene == 'cyano16S',"E"]
+qPCR['ref'] <- eff$Efficiency[eff$Efficiency$Gene == 'general16S',"E"]
+
+## we need to correct our Ct for nifH and cyano16s with our reference 16s
+## this has to be done one-by-one
+
+nifHonly <- qPCR[, c("rock","moss","location","replicate","nifH","Ct_nifH","ref","Ct_ref")]
+qPCR['nifH_wDCt'] <- compute_wDCt(
+                       x=nifHonly,
+                       block=NULL,
+                       numOfFactors=3,
+                       numberOfrefGenes=1, 
+                       set_missing_target_Ct_to_40 = TRUE
+                           )['wDCt']
+
+cyano16Sonly <- qPCR[, c("rock","moss","location","replicate","cyano16s","Ct_cyano16s","ref","Ct_ref")]
+qPCR['cyano16s_wDCt'] <- compute_wDCt(
+                       x=cyano16Sonly,
+                       block=NULL,
+                       numOfFactors=3,
+                       numberOfrefGenes=1, 
+                       set_missing_target_Ct_to_40 = TRUE
+                           )['wDCt']
+
+## pertinent: 
+https://github.com/mirzaghaderi/rtpcr/blob/main/Method.md
+
+## from these wDCt we can calculate "relative expression" level
+## this has no absolute value, but can be compared to 
+## water controls within the gene to indicate non-zero expression, 
+## and to each other for the effects of ecological changes 
+## on abundances. Since the Ct of general 16s is already subtracted,
+## we can assume some level of amplification over 
+## typical background amplification of 16s and nif homologs. 
+## hard to say if it is a complete correction, but 
+## it is at least an adjustment.  
+## however, we also need to subtract the levels observed
+## for each gene in our water control.  
+
+## this should be the calculation for RE:
+
+qPCR["nifH_RE"] <- 2^-(qPCR["nifH_wDCt"])
+qPCR['cyano16s_RE'] <- 2^-(qPCR["cyano16s_wDCt"])
+
+## looking at these negative controls, the cyano16S 
+## are different than I realized. 
+
+## let's rerun our analysis after subtracting the 
+## mean of these.
+
+## subtract the mean RE of our negative controls for each gene:
+nifH_RE_control <- mean(qPCR[qPCR$subsite=="NTC","nifH_RE"])
+qPCR["nifH_RE_corrected"] <- qPCR["nifH_RE"] - nifH_RE_control 
+## set negatives equal to zero.
+qPCR$nifH_RE_corrected[qPCR$nifH_RE_corrected < 0] <- 0
+
+## 
+cyano16s_RE_control <- mean(qPCR[qPCR$subsite=="NTC",'cyano16s_RE'] )
+
+qPCR['cyano16s_RE'] - cyano16s_RE_control
+
+## subtract the mean RE of our negative controls for each gene:
+cyano16s_RE_control <- mean(qPCR[qPCR$subsite=="NTC","cyano16s_RE"])
+qPCR["cyano16s_RE_corrected"] <- qPCR["cyano16s_RE"] - cyano16s_RE_control 
+
+## set negatives equal to zero.
+qPCR$cyano16s_RE_corrected[qPCR$cyano16s_RE_corrected < 0]  <- 0
+
+prettyNum(qPCR$nifH_RE_corrected)
+
+prettyNum(qPCR$cyano16s_RE_corrected)
+
+
+###### recovery of cyano16s and nifH data where general 16s failed #####
+
+## it should be possible to interpolate our missing RE values now. 
+## as in, places where PCRs were successful in the target genes
+## and not in the reference/house-keeping gene (general 16s). 
+## We have a several cases in which general 16s but the cycle number
+## for the 
+
+## our one crazy outlier [F09] is due to this - we have a general16s 
+## that only started to amplify really late in the trial at Ct=39, 
+## indicating a likely zero or contamination. Then the quite 
+## normal Ct values for these nifH and cyano16s for this were
+## "corrected" to astronomically different values, and became outliers.
+
+## the solution here would be to make a simple linear model
+## relating raw Ct scores to final RE scores for each 
+## gene from the large majority of cases where the 
+## general 16s reaction was successful , and use this to 
+## interpolate the RE values in nifH or cyano 16s that 
+## are missing due to a failed general 16S reaction.
+
+## The model would be RE_target ~ Cr_target
+
+## for nifH: ##
+
+## get rid of outlier
+
+qPCR["F09",]
+qPCR_noOut <- qPCR[rownames(qPCR) != "F09",]
+
+hist( qPCR$Ct_nifH, breaks=60) ## that looks pretty log-normal to me
+dev.new()
+hist( qPCR_noOut$cyano16s_RE_corrected, breaks=60) ## that looks pretty log-normal to me
+
+
+plot(qPCR_noOut$nifH_wDCt ~ qPCR_noOut$Ct_nifH)
+abline(lm(qPCR_noOut$nifH_wDCt ~ qPCR_noOut$Ct_nifH), lty=3)
+anova(lm(qPCR_noOut$nifH_wDCt ~ qPCR_noOut$Ct_nifH))
+
+## strong linear relationship. That's good
+fit <- lm(nifH_wDCt ~ Ct_nifH, data=qPCR_noOut)
+
+## our nifH Ct points where no or erroneous general 16s results occurred are:
+qPCR[is.na(qPCR$Ct_ref) | qPCR$Ct_ref > 35,] ## 20 places where general 16s ref failed
+
+## the raw nifH Ct vales for these:
+badGeneral16s_Ct_nifH <- qPCR[is.na(qPCR$Ct_ref) | qPCR$Ct_ref > 35, "Ct_nifH", drop=FALSE]
+
+#use model to predict points value
+nifH_wDCt_interpolated <- predict(fit, badGeneral16s_Ct_nifH)
+
+badGeneral16s_Ct_nifH 
+
+nifH_wDCt_interpolated
+
+## look at them:
+plot(qPCR_noOut$nifH_wDCt ~ qPCR_noOut$Ct_nifH)
+abline(lm(qPCR_noOut$nifH_wDCt ~ qPCR_noOut$Ct_nifH), lty=3)
+anova(lm(qPCR_noOut$nifH_wDCt ~ qPCR_noOut$Ct_nifH))
+points(x=qPCR[names(nifH_wDCt_interpolated ),"Ct_nifH"], 
+       y=nifH_wDCt_interpolated,
+       col="red",
+       cex=2,
+       lwd=3,
+)
+
+## merge them with raw data into a new column:
+nifH_wDCt_intpolAdded <- qPCR['nifH_wDCt']
+for (i in names(nifH_wDCt_interpolated)){ 
+  print(i) 
+  nifH_wDCt_intpolAdded[i,] <- print(nifH_wDCt_interpolated[i])
+}
+
+qPCR['nifH_wDCt_intpolAdded'] <- nifH_wDCt_intpolAdded
+
+qPCR[,'nifH_wDCt'] <- nifH_wDCt_interpolated[i]
+
+dev.new()
+plot(qPCR$Ct_nifH, qPCR$nifH_wDCt_intpolAdded)
+## looks okay.
+
+## cyano16s ## 
+
+## repeat with the cyano16s missing values that are due to 
+## failed reactions in general 16s ref
+
+
+qPCR["F09",]
+qPCR_noOut <- qPCR[rownames(qPCR) != "F09",]
+
+dev.new()
+hist( qPCR_noOut$cyano16s_RE_corrected, breaks=60) ## that looks pretty log-normal to me
+
+## the relationship between final wDCt and original Ct is not as 
+## strong as with nifH, the interpolation is a bit more hand-wavy:
+plot(qPCR_noOut$cyano16s_wDCt ~ qPCR_noOut$Ct_cyano16s)
+abline(lm(qPCR_noOut$cyano16s_wDCt ~ qPCR_noOut$Ct_cyano16s), lty=3)
+anova(lm(qPCR_noOut$cyano16s_wDCt ~ qPCR_noOut$Ct_cyano16s))
+summary(lm(qPCR_noOut$cyano16s_wDCt ~ qPCR_noOut$Ct_cyano16s))
+## highly significant, but R2 is ~.25. Try it anyway.
+
+## model
+fit <- lm(qPCR_noOut$cyano16s_wDCt ~ qPCR_noOut$Ct_cyano16s)
+
+## our cyano16s Ct points where no or erroneous general 16s results occurred are:
+qPCR[is.na(qPCR$Ct_ref) | qPCR$Ct_ref > 35,] ## 20 places where general 16s ref failed
+
+
+## the raw cyano16s Ct vales for these:
+badGeneral16s_Ct_cyano16s <- qPCR[is.na(qPCR$Ct_ref) | qPCR$Ct_ref > 35, "Ct_cyano16s", drop=FALSE]
+
+badGeneral16s_Ct_cyano16s 
+
+## we actually don't recover much, 6 points. Looks like cyano16s reactions
+## weren't much more successful that the general 16s reactions. 
+
+
+cyano16s_wDCt_interpolated <- predict(fit, badGeneral16s_Ct_cyano16s)
+
+cyano16s_wDCt_interpolated
