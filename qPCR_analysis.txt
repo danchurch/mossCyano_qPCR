@@ -1592,7 +1592,6 @@ nifH_overview
 ## to zoom in a bit
 nifH_overview + coord_cartesian(ylim=c(0, .04)) 
 
-[Interpolating missing or erroneous wΔCt values](#interolate)
 
 
 ## t-test
@@ -1611,9 +1610,30 @@ t.test(x=near_nifH_RE,y=far_nifH_RE,
 
 ## as before, difference is in the right direction, but p = .21
 
+
 ## check the linear models/anova:
+nifH_location_moss_rock_lm <- lm(nifH_RE_corrected ~ location + moss + rock, qPCRres)
+
+library(lmerTest)
+
+aa <- lmerTest::lmer(nifH_RE_corrected  ~ location  + (location|moss), data = qPCRres)
+
+aa <- lmerTest::lmer(nifH_RE_corrected  ~ location  + (location|rock), data = qPCRres)
+
+summary(aa)
+
+anova(aa)
+
+summary(lm(nifH_RE_corrected ~ location, qPCRres))
+
+summary(lm(nifH_RE_corrected ~ location:moss, qPCRres))
+
+summary(nifH_location_moss_rock_lm)
+
 nifH_moss_rock_lm <- lm(nifH_RE_corrected ~ moss + rock, qPCRres)
 summary(nifH_moss_rock_lm)
+
+summary(lm(nifH_RE_corrected ~ moss:rock, qPCRres))
 
 nifH_moss_rock_model <- aov(nifH_RE_corrected ~ moss + rock, qPCRres)
 
@@ -1627,6 +1647,8 @@ nifH_moss_overview <- ggplot(qPCRres, aes(x=moss, y=nifH_RE_corrected, fill=moss
                         geom_boxplot() 
 
 nifH_moss_overview
+
+
 
 nifH_moss_overview + coord_cartesian(ylim=c(0, .03)) 
 
