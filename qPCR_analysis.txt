@@ -1811,6 +1811,7 @@ cyano16s_moss_overview
 
 cyano16s_moss_overview + coord_cartesian(ylim=c(0, .03)) 
 
+
 ## with Cyanos16s, we don't have enough data to make a 
 ## model, but we can strongly support the presence
 ## of cyanobacteria in several mosses. 
@@ -1945,35 +1946,30 @@ cyano16s_moss_box <- ggplot(qPCRres, aes(x=moss, y=cyano16s_RE_corrected, fill=m
                         geom_boxplot() +
                         geom_boxplot(aes(col=moss), fatten=NULL, fill=NA,
                                      coef=0, outlier.shape=NA,show.legend = F)
-
 cyano16s_rock_box <- ggplot(qPCRres, aes(x=rock, y=cyano16s_RE_corrected, fill=rock)) +
                         geom_boxplot() +
                         geom_boxplot(aes(col=rock), fatten=NULL, fill=NA,
                                      coef=0, outlier.shape=NA,show.legend = T)
-
-
 cyano16s_rock_moss_box <- ggplot(qPCRres, aes(x=moss, y=cyano16s_RE_corrected, fill=moss)) +
                         geom_boxplot() +
                         facet_grid(. ~ rock)
-
  (cyano16s_moss_box | cyano16s_rock_box) / cyano16s_rock_moss_box
-
-
-
 
 
 
 summary(lm(cyano16s_RE_corrected  ~ location  + moss + rock, data = qPCRres))
 
-ylimi <- 0.025
 cyano16s_moss_box_zoom <- cyano16s_moss_box +
                       coord_cartesian(ylim=c(0, ylimi)) 
 cyano16s_rock_box_zoom <- cyano16s_rock_box +
                       coord_cartesian(ylim=c(0, ylimi)) 
 cyano16s_rock_moss_box_zoom <- cyano16s_rock_moss_box +
                            coord_cartesian(ylim=c(0, ylimi)) 
+
 cyano16s_all_zoom <- (cyano16s_moss_box_zoom | cyano16s_rock_box_zoom) / cyano16s_rock_moss_box_zoom
 cyano16s_all_zoom
+
+## 
 
 #### treat cyano16s as presence/absence ####
 
@@ -2050,21 +2046,74 @@ zeroinfl(REasCount ~ moss, data = cyanoPA)
 
 table(cyanoPA$moss, cyanoPA$REasCount) ## right, NC and TA
 
+table(cyanoPA$PA, cyanoPA$moss) 
+
+table(cyanoPA$PA, cyanoPA$rock) 
+
+cyanoPA
+
+sum(cyanoPA$rock == "G")
+
+sum(cyanoPA$rock == "L")
+
+sum(cyanoPA$rock == "S")
+
+cyanoPA[cyanoPA$rock == "G",]
+
 ## if we remove these?
 
-aa <- cyanoPA[cyanoPA$moss != "NC" & cyanoPA$moss != "TA", ]
+cyanoPA_noZeroMossSpp <- cyanoPA[cyanoPA$moss != "NC" & cyanoPA$moss != "TA", ]
 
-summary(zeroinfl(REasCount ~ moss, data = aa))
-summary(zeroinfl(REasCount ~ rock, data = aa))
-summary(zeroinfl(REasCount ~ moss + rock, data = aa)) ## here we get into trouble, because not all mosses on all rocks.
+summary(zeroinfl(REasCount ~ moss, data = cyanoPA_noZeroMossSpp))
+
+summary(zeroinfl(REasCount ~ rock, data = cyanoPA))
+
+summary(zeroinfl(REasCount ~ rock, data = cyanoPA_noZeroMossSpp))
+
+summary(zeroinfl(REasCount ~ moss + rock, data = cyanoPA_noZeroMossSpp)) ## here we get into trouble, because not all mosses on all rocks.
 
 summary(zeroinfl(REasCount ~ location, data = cyanoPA))
 
-summary(zeroinfl(REasCount ~ location, data = aa))
+summary(zeroinfl(REasCount ~ location, data = cyanoPA_noZeroMossSpp))
 
 summary(zeroinfl(REasCount ~ location + moss, data = cyanoPA))
 
-summary(zeroinfl(REasCount ~ location + moss, data = aa))
+summary(zeroinfl(REasCount ~ location + moss, data = cyanoPA_noZeroMossSpp))
+
+## last model for the day - the instance where we may be able to 
+## model both rock and moss are in the case of Granite and Sandstone
+## these two rock types hosted the same three most common mosses:
+
+cyanoPA_noL <- cyanoPA[cyanoPA$rock != "L",]
+
+summary(zeroinfl(REasCount ~ moss + rock, data = cyanoPA_noL)) 
+
+zeroinfl(REasCount ~ moss:rock, data = cyanoPA_noL)
+
+## model shows differences among the moss species abundances. 
+## The intercept is DS (Dicranum scoparium), and it is the lowest abundance, 
+## with HC (Hypnum cupressiforme) not much more abundant in cyanobacterium, 
+## and PF (Polytrichum formosum) clearly the most abundant. The coefficient 
+## for rock type Sandstone ("rockS") makes no sense to me, however. It seems 
+## to predict a general lowering of abundance in sandstone, when our data 
+## clearly show the opposite, and our previous model. 
+## Also, it is odd that this model cannot confidently detect the clearly much 
+## lower number of zeroes in our sandstone samples. 
+## Not sure, the model is maybe poorly fitting the poisson function. 
+## Anyway, I don't trust this reduced model very much to comment on the effect of rock type. 
+## and don't have time to investigate further.
+## But to document that I tried, it's here.
+
+ggplot(cyanoPA_noL, aes(x=rock, y=cyano16s_RE_corrected, fill=rock)) + 
+                        geom_boxplot() 
+
+
+
+aa <- cyanoPA_noL[cyanoPA_noL$REasCount != 0, ]
+
+mean(aa[aa$rock == "G","REasCount"])
+
+mean(aa[aa$rock == "S","REasCount"])
 
 ## leave the nifH analysis as is, view it as a measure of 
 ## the nitrogen fixation capability of these mosses
