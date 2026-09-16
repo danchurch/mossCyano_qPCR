@@ -1237,6 +1237,9 @@ zoop
 library(rtpcr)
 library(stats)
 library(ggplot2)
+library(lmerTest)
+library(patchwork)
+library(RColorBrewer)
 
 ## the original raw data is this:
 
@@ -1570,17 +1573,31 @@ hist(qPCR$nifH_RE_corrected, breaks=50)
 
 ## great, so this should be fairly clean data. 
 
+## save it as new, simpler data frame:
+qPCRres <- qPCR[qPCR$subsite != "NTC", c("subsite","rock","moss","location","nifH_RE_corrected","cyano16s_RE_corrected")]
+
+head(qPCRres)
+#write.csv(qPCRres, file="qPCRresults.csv")
+
+## save the massive dataframe, might be useful?
+head(qPCR)
+#write.csv(qPCR, file="qPCR_cleanup.csv")
+
+
 ###### comparisons #########
 
 #### nifH ####
 ### near / far ###
 
+qPCRres <- read.csv("qPCRresults.csv", row.names=1)
+
 ## the most basic question is whether
 ## there are more cyanos or at least nifH gene copies 
 ## near fern rhizomes.
 
+
+
 ## first, plot it:
-qPCRres <- qPCR[qPCR$subsite != "NTC", c("subsite","rock","moss","location","nifH_RE_corrected","cyano16s_RE_corrected")]
 
 nifH_overview <- ggplot(qPCRres, aes(x=location, y=nifH_RE_corrected, fill=moss)) + 
                         geom_boxplot() + 
@@ -1624,22 +1641,44 @@ summary(aa)
 
 anova(aa)
 
+summary(lm(nifH_RE_corrected  ~ rock, data = qPCRres))
+
+summary(lm(nifH_RE_corrected  ~ location  + moss + rock, data = qPCRres))
+
+summary(lm(nifH_RE_corrected  ~ location  + moss, data = qPCRres))
+
+summary(lm(nifH_RE_corrected  ~ location  + moss + location:moss, data = qPCRres))
+
+summary(lm(nifH_RE_corrected  ~ location:moss, data = qPCRres))
+
 summary(lm(nifH_RE_corrected ~ location, qPCRres))
 
 summary(lm(nifH_RE_corrected ~ location:moss, qPCRres))
 
 summary(nifH_location_moss_rock_lm)
 
+summary(lm(nifH_RE_corrected  ~ moss + rock, data = qPCRres))
+
+summary(lm(nifH_RE_corrected  ~ moss + rock + moss:rock, data = qPCRres))
+
 nifH_moss_rock_lm <- lm(nifH_RE_corrected ~ moss + rock, qPCRres)
 summary(nifH_moss_rock_lm)
 
 summary(lm(nifH_RE_corrected ~ moss:rock, qPCRres))
 
-nifH_moss_rock_model <- aov(nifH_RE_corrected ~ moss + rock, qPCRres)
+## rock just doesn't seem to make a difference 
+summary(aov(nifH_RE_corrected ~ rock, qPCRres))
+summary(lm(nifH_RE_corrected ~ rock, qPCRres))
+
+nifH_moss_rock_model_noInt <- aov(nifH_RE_corrected ~ moss + rock, qPCRres)
+
+nifH_moss_rock_model_int <- aov(nifH_RE_corrected ~  moss + rock + moss:rock, qPCRres)
 
 nifH_moss_model <- aov(nifH_RE_corrected ~ moss, qPCRres)
 
-summary(nifH_moss_rock_model)
+summary(nifH_moss_rock_model_noInt)
+
+summary(nifH_moss_rock_model_int)
 
 summary(nifH_moss_model)
 
@@ -1651,6 +1690,61 @@ nifH_moss_overview
 
 
 nifH_moss_overview + coord_cartesian(ylim=c(0, .03)) 
+
+## can we make a nice pathwork graphic? nifH by rock, nifH by moss, nifH by moss/rock?
+
+
+## nifH by moss:
+nifH_moss_box <- ggplot(qPCRres, aes(x=moss, y=nifH_RE_corrected, fill=moss)) + 
+                        geom_boxplot() +
+                        geom_boxplot(aes(col=moss), fatten=NULL, fill=NA, 
+                                     coef=0, outlier.shape=NA,show.legend = F)
+
+nifH_moss_box
+
+## nifH by rock:
+
+nifH_rock_box <- ggplot(qPCRres, aes(x=rock, y=nifH_RE_corrected, fill=rock)) + 
+                        geom_boxplot() + 
+                        geom_boxplot(aes(col=rock), fatten=NULL, fill=NA, 
+                                     coef=0, outlier.shape=NA,show.legend = T) 
+
+nifH_rock_box 
+
+## nifH by rock and moss:
+
+nifH_rock_moss_box <- ggplot(qPCRres, aes(x=moss, y=nifH_RE_corrected, fill=moss)) + 
+                        geom_boxplot() +
+                        facet_grid(. ~ rock)
+
+nifH_moss_box
+nifH_rock_box
+nifH_rock_moss_box
+
+## combine them into one with patchwork:
+
+aa <- (nifH_moss_box | nifH_rock_box) / nifH_rock_moss_box
+
+## or if we want a zoomed in version:
+ylimi <- 0.03
+nifH_moss_box_zoom <- nifH_moss_box +
+                      coord_cartesian(ylim=c(0, ylimi)) 
+nifH_rock_box_zoom <- nifH_rock_box +
+                      coord_cartesian(ylim=c(0, ylimi)) 
+nifH_rock_moss_box_zoom <- nifH_rock_moss_box +
+                           coord_cartesian(ylim=c(0, ylimi)) 
+nifH_all_zoom <- (nifH_moss_box_zoom | nifH_rock_box_zoom) / nifH_rock_moss_box_zoom
+nifH_all_zoom
+
+## get an idea of the sample sizes:
+
+
+sampleSizes <- as.data.frame(table(qPCRres$rock, qPCRres$moss))
+
+ggplot(sampleSizes, aes(x=name, y=value)) + 
+  geom_bar(stat = "identity")
+
+barplot(sampleSizes)
 
 ## highly significant now for the different moss types,
 ## but not for the rock
@@ -1693,12 +1787,20 @@ cyano16s_moss_rock_lm <- lm(cyano16s_RE_corrected ~ moss + rock, qPCRres)
 summary(cyano16s_moss_rock_lm)
 
 cyano16s_moss_rock_model <- aov(cyano16s_RE_corrected ~ moss + rock, qPCRres)
-
-cyano16s_moss_model <- aov(cyano16s_RE_corrected ~ moss, qPCRres)
-
 summary(cyano16s_moss_rock_model)
 
+cyano16s_moss_model <- aov(cyano16s_RE_corrected ~ moss, qPCRres)
 summary(cyano16s_moss_model)
+
+cyano16s_rock_model <- aov(cyano16s_RE_corrected ~ rock, qPCRres)
+summary(cyano16s_rock_model)
+
+cyano16s_rock_model_int <- aov(cyano16s_RE_corrected ~ moss:rock, qPCRres)
+summary(cyano16s_rock_model_int)
+
+cyano16s_rock_model_int <- lm(cyano16s_RE_corrected ~ moss:rock, qPCRres)
+summary(cyano16s_rock_model_int)
+
 
 cyano16s_moss_overview <- ggplot(qPCRres, aes(x=moss, y=cyano16s_RE_corrected, fill=moss)) + 
                         geom_boxplot() 
@@ -1722,8 +1824,253 @@ cyano16s_moss_overview + coord_cartesian(ylim=c(0, .03))
 ## time to build a notebook for Thomas
 ## what to include? 
 
-## don't include data cleaning. Start from 
+## don't include data reformatting in pandas. Start from 
 ## the two big CSVs, standards.csv and expMat.csv
 ## somewhere around line 1232
+
+[Proximity to fern rhizomes](#nearFar)
+[Rock type and Moss species](#rockMoss)
+
+
+#### addendum - log transformation of RE ###
+
+## I just realized I probably should have transformed the
+## RE data back with a log transform. ugh. 
+## kind of weird, taking the natural log of something I
+## just exponentiated (base 2).
+
+## but not sure if this would be any different than
+## giving a log link function to a general linear model
+## 
+
+## then question of what to do with the zeros...
+
+## let's test.
+
+aa <- log(qPCRres$nifH_RE_corrected + 0.0000000001)
+
+bb <- is.infinite(aa)
+
+cbind(aa,bb,qPCRres$nifH_RE_corrected)
+
+hist(aa, breaks=100)
+
+hist(qPCRres$nifH_RE_corrected, breaks=100)
+dev.new()
+hist(log(qPCRres$nifH_RE_corrected + 1), breaks=100)
+
+## for example, the full model without interactions:
+aa <- lm(nifH_RE_corrected  ~ location  + moss + rock, data = qPCRres)
+summary(aa)
+
+plot(aa)
+
+qPCRres["A06","nifH_RE_corrected"]
+
+summary(lm(log(nifH_RE_corrected + 0.0000000001) ~ location  + moss + rock, data = qPCRres)) 
+summary(lm(log(nifH_RE_corrected + 1) ~ location  + moss + rock, data = qPCRres)) 
+
+## giving a very small addition to the log makes the model
+## this does make our model less sensitive to differences 
+## among mosses, I think because it drives all the zeroes 
+## really, really far away, increasing the variances and
+## making any set of samples with zeroes in them more alike. 
+## basically creates a huge set of negative-value outliers 
+## that are in all sample groups, weighting them.
+
+## so rule that out. the +1 strategy seems to yield 
+## results very similar to our original RE tests 
+
+summary(lm(nifH_RE_corrected ~ + moss + rock, data = qPCRres)) 
+
+summary(lm(log(nifH_RE_corrected + 1) ~ + moss + rock, data = qPCRres)) 
+
+summary(lm(log(nifH_RE_corrected + 0.0000000001) ~ + moss + rock, data = qPCRres)) 
+summary(lm(log(nifH_RE_corrected + 0.0000000001) ~ rock, data = qPCRres)) 
+
+## check behavior in anovas:
+
+nifH_moss_rock_model_noInt <- aov(nifH_RE_corrected ~ moss + rock, qPCRres)
+summary(nifH_moss_rock_model_noInt)
+plot(nifH_moss_rock_model_noInt)
+
+nifH_moss_rock_model_noInt_logSmall <- aov(log(nifH_RE_corrected + 0.0000000001) ~ moss + rock, qPCRres)
+summary(nifH_moss_rock_model_noInt_logSmall)
+
+nifH_moss_rock_model_noInt_logOne <- aov(log(nifH_RE_corrected + 1) ~ moss + rock, qPCRres)
+summary(nifH_moss_rock_model_noInt_logOne)
+
+TukeyHSD(nifH_moss_rock_model_noInt_log, conf.level=.95)
+
+hist(qPCRres$nifH_RE_corrected, breaks=100)
+
+dev.new()
+hist(log(qPCRres$nifH_RE_corrected+1), breaks=100)
+
+dev.new()
+hist(log(qPCRres$nifH_RE_corrected+.000001), breaks=100)
+
+## the +1 approach for some reason keeps our data in basically the 
+## same distribution. 
+## ugh. 
+## so no easy answers here. 
+
+## maybe we can skirt the problem using a generalized linear model
+
+## it looks like we could fit a gamma distribution to these data.
+## and a log function would be appropriate. 
+
+## try it 
+
+
+summary(lm(nifH_RE_corrected ~ + moss + rock, data = qPCRres)) 
+
+
+glm(nifH_RE_corrected ~ moss + rock, data=qPCRres, family=Gamma(link="log"))
+## nope, zeroes not possible
+
+glm(y ~ x, data=df, family=Gamma(link="log")) 
+
+glm(nifH_RE_corrected ~ moss + rock, data=qPCRres, family=gaussian(link="log"))
+
+lm(log(nifH_RE_corrected) ~ moss + rock, data=qPCRres)
+lm(log(nifH_RE_corrected) ~ moss + rock, data=qPCRres)
+
+glm(nifH_RE_corrected ~ moss + rock, family=gaussian, data=my.dat)
+
+
+##############
+
+cyano16s_moss_box <- ggplot(qPCRres, aes(x=moss, y=cyano16s_RE_corrected, fill=moss)) +
+                        geom_boxplot() +
+                        geom_boxplot(aes(col=moss), fatten=NULL, fill=NA,
+                                     coef=0, outlier.shape=NA,show.legend = F)
+
+cyano16s_rock_box <- ggplot(qPCRres, aes(x=rock, y=cyano16s_RE_corrected, fill=rock)) +
+                        geom_boxplot() +
+                        geom_boxplot(aes(col=rock), fatten=NULL, fill=NA,
+                                     coef=0, outlier.shape=NA,show.legend = T)
+
+
+cyano16s_rock_moss_box <- ggplot(qPCRres, aes(x=moss, y=cyano16s_RE_corrected, fill=moss)) +
+                        geom_boxplot() +
+                        facet_grid(. ~ rock)
+
+ (cyano16s_moss_box | cyano16s_rock_box) / cyano16s_rock_moss_box
+
+
+
+
+
+
+summary(lm(cyano16s_RE_corrected  ~ location  + moss + rock, data = qPCRres))
+
+ylimi <- 0.025
+cyano16s_moss_box_zoom <- cyano16s_moss_box +
+                      coord_cartesian(ylim=c(0, ylimi)) 
+cyano16s_rock_box_zoom <- cyano16s_rock_box +
+                      coord_cartesian(ylim=c(0, ylimi)) 
+cyano16s_rock_moss_box_zoom <- cyano16s_rock_moss_box +
+                           coord_cartesian(ylim=c(0, ylimi)) 
+cyano16s_all_zoom <- (cyano16s_moss_box_zoom | cyano16s_rock_box_zoom) / cyano16s_rock_moss_box_zoom
+cyano16s_all_zoom
+
+#### treat cyano16s as presence/absence ####
+
+## it may make more sense to model 16S data as presence/absence
+
+## maybe a logistical regression with categorical predictors
+
+## get down to just complete data for cyano16s 
+
+cyanoPA <- qPCRres[,c("subsite","location","rock","moss","cyano16s_RE_corrected")]
+cyanoPA <- cyanoPA[complete.cases(cyanoPA),]
+## create PA column:
+cyanoPA['PA'] <- 0
+cyanoPA[cyanoPA$cyano16s_RE_corrected > 0, "PA"] <- 1
+
+cyanoPA$PA
+
+table(cyanoPA$PA, cyanoPA$moss)
+
+table(cyanoPA$rock, cyanoPA$moss)
+
+## model this as a function of rock and moss:
+
+bb <- glm(PA ~ rock + moss + location, family = binomial(link=logit), data = aa)
+summary(bb)
+
+## ugh this is noisy data. Think on this...
+
+### look at zero-inflated model 
+
+## check out an example, say https://stats.oarc.ucla.edu/r/dae/zip/:
+
+library("pscl")
+zinb <- read.csv("https://stats.idre.ucla.edu/stat/data/fish.csv")
+zinb <- within(zinb, {
+    nofish <- factor(nofish)
+    livebait <- factor(livebait)
+    camper <- factor(camper)
+})
+
+ggplot(zinb, aes(count)) + geom_histogram(bins=100) 
+
+dev.new()
+
+ggplot(zinb, aes(count)) + geom_histogram(bins=100) + scale_x_log10()
+
+## our data
+dev.new()
+
+ggplot(cyanoPA, aes(cyano16s_RE_corrected)) + geom_histogram(bins=100)
+
+## I think we need to convert our RE yet again, to fit the 
+## normal format of count data. This would be integer data, non-negative.
+
+cyanoPA$cyano16s_RE_corrected
+
+cyanoPA['REasCount'] <- round(cyanoPA$cyano16s_RE_corrected * 1000)
+
+dev.new()
+ggplot(cyanoPA, aes(REasCount)) + geom_histogram(bins=100)
+
+## their data, ZIP model:
+summary(m1 <- zeroinfl(count ~ child + camper | persons, data = zinb))
+
+## our data, ZIP model
+
+zeroinfl(REasCount ~ rock, data = cyanoPA)
+
+zeroinfl(REasCount ~ rock, data = cyanoPA)
+
+zeroinfl(REasCount ~ moss, data = cyanoPA)
+## this one introduces singularity. Is it because there are 
+## mosses with all zeroes? 
+
+table(cyanoPA$moss, cyanoPA$REasCount) ## right, NC and TA
+
+## if we remove these?
+
+aa <- cyanoPA[cyanoPA$moss != "NC" & cyanoPA$moss != "TA", ]
+
+summary(zeroinfl(REasCount ~ moss, data = aa))
+summary(zeroinfl(REasCount ~ rock, data = aa))
+summary(zeroinfl(REasCount ~ moss + rock, data = aa)) ## here we get into trouble, because not all mosses on all rocks.
+
+summary(zeroinfl(REasCount ~ location, data = cyanoPA))
+
+summary(zeroinfl(REasCount ~ location, data = aa))
+
+summary(zeroinfl(REasCount ~ location + moss, data = cyanoPA))
+
+summary(zeroinfl(REasCount ~ location + moss, data = aa))
+
+## leave the nifH analysis as is, view it as a measure of 
+## the nitrogen fixation capability of these mosses
+
+## focus on the pseudo-count approach with ZIP model for 
+## the cyanobacterial 16S, and intended as a measure 
+## of abundance. 
 
 
